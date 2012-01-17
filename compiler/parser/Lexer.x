@@ -1,5 +1,5 @@
 -----------------------------------------------------------------------------
--- (c) The University of Glasgow, 2006
+-- (c) The University of Glasgow, 2006 
 --
 -- GHC's lexer.
 --
