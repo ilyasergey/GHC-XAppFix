@@ -445,6 +445,7 @@ data ExtensionFlag
    | Opt_NondecreasingIndentation
    | Opt_RelaxedLayout
    | Opt_TraditionalRecordSyntax
+   | Opt_ApplicativeFix
    deriving (Eq, Enum, Show)
 
 -- | Contains not only a collection of 'DynFlag's but also a plethora of
@@ -1985,7 +1986,8 @@ xFlags = [
   ( "OverlappingInstances",             Opt_OverlappingInstances, nop ),
   ( "UndecidableInstances",             Opt_UndecidableInstances, nop ),
   ( "IncoherentInstances",              Opt_IncoherentInstances, nop ),
-  ( "PackageImports",                   Opt_PackageImports, nop )
+  ( "PackageImports",                   Opt_PackageImports, nop ),
+  ( "ApplicativeFix",                   Opt_ApplicativeFix, nop )
   ]
 
 defaultFlags :: [DynFlag]
