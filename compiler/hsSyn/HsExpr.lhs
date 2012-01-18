@@ -153,6 +153,9 @@ data HsExpr id
   | HsLet       (HsLocalBinds id) -- let(rec)
                 (LHsExpr  id)
 
+  | HsAlet      (HsLocalBinds id) -- alet (ApplicativeFix)
+                (LHsExpr  id)
+
   | HsDo        (HsStmtContext Name) -- The parameterisation is unimportant
                                      -- because in this context we never use
                                      -- the PatGuard or ParStmt variant
@@ -465,6 +468,10 @@ ppr_expr (HsLet binds expr@(L _ (HsLet _ _)))
 
 ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
+         hang (ptext (sLit "in"))  2 (ppr expr)]
+
+ppr_expr (HsAlet binds expr)
+  = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
 ppr_expr (HsDo do_or_list_comp stmts _) = pprDo do_or_list_comp stmts
