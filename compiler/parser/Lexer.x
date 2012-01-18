@@ -438,6 +438,7 @@ data Token
   | ITinfixr
   | ITinstance
   | ITlet
+  | ITalet
   | ITmodule
   | ITnewtype
   | ITof
@@ -623,7 +624,9 @@ reservedWordsFM = listToUFM $
          ( "then",           ITthen,          0 ),
          ( "type",           ITtype,          0 ),
          ( "where",          ITwhere,         0 ),
-         ( "_scc_",          ITscc,           0 ),            -- ToDo: remove
+         ( "_scc_",          ITscc,           0 ),            -- ToDo:
+-- remove
+	 ("alet",            ITalet,          bit applicativeFixBit), 
 
          ( "forall",         ITforall,        bit explicitForallBit .|.
                                               bit inRulePragBit),
@@ -1075,6 +1078,7 @@ maybe_layout t = do -- If the alternative layout rule is enabled then
           f ITmdo   = pushLexState layout_do
           f ITof    = pushLexState layout
           f ITlet   = pushLexState layout
+          f ITalet  = pushLexState layout
           f ITwhere = pushLexState layout
           f ITrec   = pushLexState layout
           f _       = return ()
@@ -1807,6 +1811,8 @@ safeHaskellBit :: Int
 safeHaskellBit = 26
 traditionalRecordSyntaxBit :: Int
 traditionalRecordSyntaxBit = 27
+applicativeFixBit :: Int
+applicativeFixBit = 28
 
 always :: Int -> Bool
 always           _     = True
@@ -1909,6 +1915,7 @@ mkPState flags buf loc =
                .|. nondecreasingIndentationBit `setBitIf` xopt Opt_NondecreasingIndentation flags
                .|. safeHaskellBit              `setBitIf` safeImportsOn                     flags
                .|. traditionalRecordSyntaxBit  `setBitIf` xopt Opt_TraditionalRecordSyntax  flags
+               .|. applicativeFixBit           `setBitIf` xopt Opt_ApplicativeFix           flags
       --
       setBitIf :: Int -> Bool -> Int
       b `setBitIf` cond | cond      = bit b
@@ -2011,6 +2018,7 @@ lexTokenAlr = do mPending <- popPendingImplicitToken
                  case unLoc t of
                      ITwhere -> setAlrExpectingOCurly (Just ALRLayoutWhere)
                      ITlet   -> setAlrExpectingOCurly (Just ALRLayoutLet)
+                     ITalet  -> setAlrExpectingOCurly (Just ALRLayoutLet)
                      ITof    -> setAlrExpectingOCurly (Just ALRLayoutOf)
                      ITdo    -> setAlrExpectingOCurly (Just ALRLayoutDo)
                      ITmdo   -> setAlrExpectingOCurly (Just ALRLayoutDo)
