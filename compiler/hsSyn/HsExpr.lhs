@@ -467,7 +467,7 @@ ppr_expr (HsLet binds expr@(L _ (HsLet _ _)))
          ppr_lexpr expr]
 
 ppr_expr (HsLet binds expr)
-  = sep [hang (ptext (sLit "lettest")) 2 (pprBinds binds),
+  = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
 ppr_expr (HsAlet binds expr)
