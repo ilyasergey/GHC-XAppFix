@@ -224,6 +224,7 @@ incorrect.
  'infixr'       { L _ ITinfixr }
  'instance'     { L _ ITinstance }
  'let'          { L _ ITlet }
+ 'alet'         { L _ ITalet }
  'module'       { L _ ITmodule }
  'newtype'      { L _ ITnewtype }
  'of'           { L _ ITof }
@@ -1363,6 +1364,7 @@ exp10 :: { LHsExpr RdrName }
                                                                 (unguardedGRHSs $6)
                                                             ]) }
         | 'let' binds 'in' exp                  { LL $ HsLet (unLoc $2) $4 }
+        | 'alet' binds 'in' exp                  { LL $ HsAlet (unLoc $2) $4 }
         | 'if' exp optSemi 'then' exp optSemi 'else' exp
                                         {% checkDoAndIfThenElse $2 $3 $5 $6 $8 >>
                                            return (LL $ mkHsIf $2 $5 $8) }
