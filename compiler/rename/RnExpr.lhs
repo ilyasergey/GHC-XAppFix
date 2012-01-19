@@ -236,7 +236,7 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet binds expr)
+rnExpr (HsAlet _binds _expr)
   = panic "appfix: not implemented"
 
 rnExpr (HsDo do_or_lc stmts _)
