@@ -626,6 +626,7 @@ zonkExpr env (HsLet binds expr)
     zonkLExpr new_env expr	`thenM` \ new_expr ->
     returnM (HsLet new_binds new_expr)
 
+zonkExpr env (HsAlet binds expr) = panic "appfix: not implemented"
 zonkExpr env (HsDo do_or_lc stmts ty)
   = zonkStmts env stmts 	`thenM` \ (_, new_stmts) ->
     zonkTcTypeToType env ty	`thenM` \ new_ty   ->

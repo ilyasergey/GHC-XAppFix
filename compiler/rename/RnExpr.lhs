@@ -236,6 +236,9 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
+rnExpr (HsAlet binds expr)
+  = panic "appfix: not implemented"
+
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))
 	; return ( HsDo do_or_lc stmts' placeHolderType, fvs ) }
@@ -448,6 +451,8 @@ convertOpFormsCmd (HsIf f exp c1 c2)
 convertOpFormsCmd (HsLet binds cmd)
   = HsLet binds (convertOpFormsLCmd cmd)
 
+convertOpFormsCmd (HsAlet binds cmd) = HsAlet binds (convertOpFormsLCmd cmd)
+
 convertOpFormsCmd (HsDo DoExpr stmts ty)
   = HsDo ArrowExpr (map (fmap convertOpFormsStmt) stmts) ty
     -- Mark the HsDo as begin the body of an arrow command
@@ -503,6 +508,7 @@ methodNamesCmd (HsIf _ _ c1 c2)
   = methodNamesLCmd c1 `plusFV` methodNamesLCmd c2 `addOneFV` choiceAName
 
 methodNamesCmd (HsLet _ c)      = methodNamesLCmd c
+methodNamesCmd (HsAlet _ c)      = methodNamesLCmd c
 methodNamesCmd (HsDo _ stmts _) = methodNamesStmts stmts 
 methodNamesCmd (HsApp c _)      = methodNamesLCmd c
 methodNamesCmd (HsLam match)    = methodNamesMatch match

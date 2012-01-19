@@ -387,6 +387,7 @@ tcExpr (HsLet binds expr) res_ty
 			     tcMonoExpr expr res_ty   
 	; return (HsLet binds' expr') }
 
+tcExpr (HsAlet binds expr) res_ty = panic "appfix: not implemented"
 tcExpr (HsCase scrut matches) exp_ty
   = do	{  -- We used to typecheck the case alternatives first.
 	   -- The case patterns tend to give good type info to use
