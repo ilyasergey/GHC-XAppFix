@@ -22,6 +22,7 @@ module RnBinds (
 
    -- Renaming local bindings
    rnLocalBindsAndThen, rnLocalValBindsLHS, rnLocalValBindsRHS,
+   rnLocalAletBindsAndThen,
 
    -- Other bindings
    rnMethodBinds, renameSigs, mkSigTvFn,
@@ -207,7 +208,7 @@ rnLocalBindsAndThen EmptyLocalBinds thing_inside
   = thing_inside EmptyLocalBinds
 
 rnLocalBindsAndThen (HsValBinds val_binds) thing_inside
-  = rnLocalValBindsAndThen val_binds $ \ val_binds' -> 
+  = rnLocalValBindsPAndThen val_binds depAnalBinds $ \ val_binds' -> 
       thing_inside (HsValBinds val_binds')
 
 rnLocalBindsAndThen (HsIPBinds binds) thing_inside = do
@@ -225,6 +226,17 @@ rnIPBind (IPBind n expr) = do
     n' <- rnIPName n
     (expr',fvExpr) <- rnLExpr expr
     return (IPBind n' expr', fvExpr)
+
+rnLocalAletBindsAndThen :: HsLocalBinds RdrName
+                           -> (HsLocalBinds Name -> RnM (result, FreeVars))
+                           -> RnM (result, FreeVars)
+rnLocalAletBindsAndThen EmptyLocalBinds thing_inside
+  = thing_inside EmptyLocalBinds
+rnLocalAletBindsAndThen (HsValBinds val_binds) thing_inside
+  = rnLocalValBindsPAndThen val_binds depAnalBindsTriv $ \ val_binds' -> 
+      thing_inside (HsValBinds val_binds')
+rnLocalAletBindsAndThen (HsIPBinds _binds) _thing_inside = 
+  panic "appfix: IP binds shouldn't be here..."
 \end{code}
 
 
@@ -289,11 +301,20 @@ rnValBindsLHS _ b = pprPanic "rnValBindsLHSFromDoc" (ppr b)
 rnValBindsRHS :: HsSigCtxt 
               -> HsValBindsLR Name RdrName
               -> RnM (HsValBinds Name, DefUses)
+rnValBindsRHS ctxt valbinds = rnValBindsRHSP ctxt valbinds depAnalBinds
 
-rnValBindsRHS ctxt (ValBindsIn mbinds sigs)
+type BindsDepAnalyser = Bag (LHsBind Name, [Name], Uses) -> ([(RecFlag, LHsBinds Name)], DefUses)
+
+-- note: takes the dep analyser function as a parameter, so that we can 
+-- do a trivial dep analysis for alet (ApplicativeFix) binds
+rnValBindsRHSP :: HsSigCtxt 
+              -> HsValBindsLR Name RdrName
+              -> BindsDepAnalyser
+              -> RnM (HsValBinds Name, DefUses)
+rnValBindsRHSP ctxt (ValBindsIn mbinds sigs) depAnalBinds_
   = do { sigs' <- renameSigs ctxt sigs
        ; binds_w_dus <- mapBagM (rnBind (mkSigTvFn sigs')) mbinds
-       ; case depAnalBinds binds_w_dus of
+       ; case depAnalBinds_ binds_w_dus of
            (anal_binds, anal_dus) -> return (valbind', valbind'_dus)
               where
                 valbind' = ValBindsOut anal_binds sigs'
@@ -303,7 +324,7 @@ rnValBindsRHS ctxt (ValBindsIn mbinds sigs)
 			       -- the uses in the sigs
        }
 
-rnValBindsRHS _ b = pprPanic "rnValBindsRHS" (ppr b)
+rnValBindsRHSP _ b _ = pprPanic "rnValBindsRHS" (ppr b)
 
 -- Wrapper for local binds
 --
@@ -317,15 +338,28 @@ rnLocalValBindsRHS :: NameSet  -- names bound by the LHSes
 rnLocalValBindsRHS bound_names binds
   = rnValBindsRHS (LocalBindCtxt bound_names) binds
 
+-- note: takes the dep analyser function as a parameter, so that we can 
+-- do a trivial dep analysis for alet (ApplicativeFix) binds
+rnLocalValBindsRHSP :: NameSet  -- names bound by the LHSes
+                    -> HsValBindsLR Name RdrName
+                    -> BindsDepAnalyser
+                    -> RnM (HsValBinds Name, DefUses)
+rnLocalValBindsRHSP bound_names binds depAnalBinds_
+  = rnValBindsRHSP (LocalBindCtxt bound_names) binds depAnalBinds_
+
 -- for local binds
 -- wrapper that does both the left- and right-hand sides 
 --
 -- here there are no local fixity decls passed in;
 -- the local fixity decls come from the ValBinds sigs
-rnLocalValBindsAndThen :: HsValBinds RdrName
-                       -> (HsValBinds Name -> RnM (result, FreeVars))
-                       -> RnM (result, FreeVars)
-rnLocalValBindsAndThen binds@(ValBindsIn _ sigs) thing_inside
+-- 
+-- note: takes the dep analyser function as a parameter, so that we can 
+-- do a trivial dep analysis for alet (ApplicativeFix) binds
+rnLocalValBindsPAndThen :: HsValBinds RdrName
+                        -> BindsDepAnalyser
+                        -> (HsValBinds Name -> RnM (result, FreeVars))
+                        -> RnM (result, FreeVars)
+rnLocalValBindsPAndThen binds@(ValBindsIn _ sigs) depAnalBinds_ thing_inside 
  = do	{     -- (A) Create the local fixity environment 
 	  new_fixities <- makeMiniFixityEnv [L loc sig | L loc (FixSig sig) <- sigs]
 
@@ -337,7 +371,7 @@ rnLocalValBindsAndThen binds@(ValBindsIn _ sigs) thing_inside
           addLocalFixities new_fixities bound_names $ do
 
 	{      -- (C) Do the RHS and thing inside
-	  (binds', dus) <- rnLocalValBindsRHS (mkNameSet bound_names) new_lhs 
+	  (binds', dus) <- rnLocalValBindsRHSP (mkNameSet bound_names) new_lhs depAnalBinds_
         ; (result, result_fvs) <- thing_inside binds'
 
 		-- Report unused bindings based on the (accurate) 
@@ -372,7 +406,7 @@ rnLocalValBindsAndThen binds@(ValBindsIn _ sigs) thing_inside
          	-- The bound names are pruned out of all_uses
 	        -- by the bindLocalNamesFV call above
 
-rnLocalValBindsAndThen bs _ = pprPanic "rnLocalValBindsAndThen" (ppr bs)
+rnLocalValBindsPAndThen bs _ _ = pprPanic "rnLocalValBindsPAndThen" (ppr bs)
 
 
 -- Process the fixity declarations, making a FastString -> (Located Fixity) map
@@ -527,6 +561,16 @@ depAnalBinds binds_w_dus
 	where
 	  defs = mkNameSet [b | (_,bs,_) <- binds_w_dus, b <- bs]
 	  uses = unionManyNameSets [u | (_,_,u) <- binds_w_dus]
+
+
+-- a trivial alternative for the previous function, for use with alet...
+depAnalBindsTriv :: Bag (LHsBind Name, [Name], Uses)
+                    -> ([(RecFlag, LHsBinds Name)], DefUses)
+depAnalBindsTriv binds_w_dus
+  = ([(Recursive, mapBag (\(b,_,_) -> b) binds_w_dus)], map get_du $ bagToList binds_w_dus)
+  where
+    get_du (_, bndrs, uses) = (Just (mkNameSet bndrs), uses)
+
 
 
 ---------------------

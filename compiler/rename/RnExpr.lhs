@@ -29,7 +29,7 @@ import {-# SOURCE #-} TcSplice( runQuasiQuoteExpr )
 
 import RnSource  ( rnSrcDecls, findSplice )
 import RnBinds   ( rnLocalBindsAndThen, rnLocalValBindsLHS, rnLocalValBindsRHS,
-                   rnMatchGroup, makeMiniFixityEnv) 
+                   rnLocalAletBindsAndThen, rnMatchGroup, makeMiniFixityEnv) 
 import HsSyn
 import TcRnMonad
 import TcEnv		( thRnBrack )
@@ -236,8 +236,10 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet _binds _expr)
-  = panic "appfix: not implemented"
+rnExpr (HsAlet binds expr)
+  = rnLocalAletBindsAndThen binds           $ \ binds' ->
+    rnLExpr expr                         `thenM` \ (expr', fvExpr) ->
+    return (HsAlet binds' expr', fvExpr)
 
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))
