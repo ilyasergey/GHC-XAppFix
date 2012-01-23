@@ -45,6 +45,7 @@ module RdrHsSyn (
         checkRecordSyntax,
         parseError,
         parseErrorSDoc,
+        checkAletBindings,    -- check well-formedness of 'alet'-bindings
     ) where
 
 import HsSyn            -- Lots of it
@@ -64,7 +65,8 @@ import PrelNames        ( forall_tv_RDR )
 import DynFlags
 import SrcLoc
 import OrdList          ( OrdList, fromOL )
-import Bag              ( Bag, emptyBag, consBag, foldrBag )
+import Bag              ( Bag, emptyBag, consBag, foldrBag, 
+                          isEmptyBag, filterBag, bagToList )
 import Outputable
 import FastString
 import Maybes
@@ -979,6 +981,43 @@ mkExtName :: RdrName -> CLabelString
 mkExtName rdrNm = mkFastString (occNameString (rdrNameOcc rdrNm))
 \end{code}
 
+%************************************************************************
+%*                                                                      *
+\subsection{Functions to handle bindings fo applicative fix}
+%*                                                                      *
+%************************************************************************
+
+1. Only plain Fun-bindings are allowed within 'alet'.
+
+\begin{code}
+
+-- -------------------------------------------------------------------------
+-- Checking alet-bindings.
+
+-- We parse alet-bindings just like ordinary bindings,
+-- checking that there are no pattern-bindings in there
+
+checkAletBindings :: Located (HsLocalBinds RdrName) -> P (HsLocalBinds RdrName)
+checkAletBindings (L loc bs@(HsValBinds (ValBindsIn bBag _))) 
+  = if isEmptyBag badBinds
+    then return bs
+    else aletBindError $ head $ bagToList badBinds
+    where badForAlet (L _ (FunBind {})) = False
+          badForAlet _                  = True
+          badBinds                      = filterBag badForAlet bBag        
+          aletBindError (L l pb@(PatBind {}))
+            = parseErrorSDoc l (text "No pattern bindings allowed in alet:" <+> ppr pb)
+          aletBindError _
+            = parseErrorSDoc loc (text "Only plain variable bindings are allowed in alet:" <+> pprBinds bs)
+
+checkAletBindings (L _ (HsValBinds (ValBindsOut _ _)))
+  = panic "appfix: not applicable"
+checkAletBindings (L loc bs@(HsIPBinds _)) 
+  = parseErrorSDoc loc (text "No implicit parameters allowed in applicative-fix bindings:" <+> pprBinds bs)
+checkAletBindings (L loc EmptyLocalBinds) 
+  = parseErrorSDoc loc (text "No empty bindings allowed in applicative-fix.")
+
+\end{code}
 
 -----------------------------------------------------------------------------
 -- Misc utils
