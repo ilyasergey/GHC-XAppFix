@@ -998,10 +998,12 @@ mkExtName rdrNm = mkFastString (occNameString (rdrNameOcc rdrNm))
 -- checking that there are no pattern-bindings in there
 
 checkAletBindings :: Located (HsLocalBinds RdrName) -> P (HsLocalBinds RdrName)
-checkAletBindings (L loc bs@(HsValBinds (ValBindsIn bBag _))) 
-  = if isEmptyBag badBinds
-    then return bs
-    else aletBindError $ head $ bagToList badBinds
+checkAletBindings (L loc bs@(HsValBinds (ValBindsIn bBag sigs))) 
+  = case sigs of 
+      (L l sig):_ -> parseErrorSDoc l (text "No explicit type signatures allowed in alet:" <+> ppr sig)
+      []          -> if isEmptyBag badBinds
+                     then return bs
+                     else aletBindError $ head $ bagToList badBinds
     where badForAlet (L _ (FunBind {})) = False
           badForAlet _                  = True
           badBinds                      = filterBag badForAlet bBag        
