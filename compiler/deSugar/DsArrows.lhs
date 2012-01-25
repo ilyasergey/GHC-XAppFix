@@ -554,8 +554,6 @@ dsCmd ids local_vars stack res_ty (HsLet binds body) env_ids = do
                         core_body,
         exprFreeIds core_binds `intersectVarSet` local_vars)
 
-dsCmd _ids _local_vars _stack _res_ty (HsAlet _binds _body) _env_ids = panic "appfix: not implemented"
-
 dsCmd ids local_vars [] res_ty (HsDo _ctxt stmts _) env_ids
   = dsCmdDo ids local_vars res_ty stmts env_ids
 

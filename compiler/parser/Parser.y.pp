@@ -1365,7 +1365,7 @@ exp10 :: { LHsExpr RdrName }
                                                             ]) }
         | 'let' binds 'in' exp                  { LL $ HsLet (unLoc $2) $4 }
         | 'alet' binds 'in' exp                 {% do { bs <- checkAletBindings $2;
-                                                        return $ LL $ HsAlet bs $4 } }
+                                                        return $ LL $ HsAlet bs $4 noAletTooling } }
         | 'if' exp optSemi 'then' exp optSemi 'else' exp
                                         {% checkDoAndIfThenElse $2 $3 $5 $6 $8 >>
                                            return (LL $ mkHsIf $2 $5 $8) }

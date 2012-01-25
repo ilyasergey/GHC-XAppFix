@@ -297,6 +297,24 @@ basicKnownKeyNames
         , guardMName
         , liftMName
         , mzipName
+
+        -- ApplicativeFix
+        , appfixClassName  
+          --, afixName (not needed?)
+        , composeTyConName 
+        , tconsTyConName -- (:::)
+        , tnilTyConName 
+        , tprodTyConName
+        , phantomTyConName
+        , whooName
+        , phantom1TyConName
+        , whoo1Name
+        , tconsName
+        , tnilName
+        , wrapName
+        , projTProdName
+        , tHereName
+        , tThereName
     ]
 
 genericTyConNames :: [Name]
@@ -333,7 +351,8 @@ gHC_PRIM, gHC_TYPES, gHC_GENERICS,
     gHC_FLOAT, gHC_TOP_HANDLER, sYSTEM_IO, dYNAMIC, tYPEABLE, tYPEABLE_INTERNAL, gENERICS,
     dOTNET, rEAD_PREC, lEX, gHC_INT, gHC_WORD, mONAD, mONAD_FIX, mONAD_ZIP,
     aRROW, cONTROL_APPLICATIVE, gHC_DESUGAR, rANDOM, gHC_EXTS,
-    cONTROL_EXCEPTION_BASE :: Module
+    cONTROL_EXCEPTION_BASE, aPPLICATIVE_FIX,
+    aPPLICATIVE_GENERIFIX, aPPLICATIVE_COMPOSE :: Module
 
 gHC_PRIM        = mkPrimModule (fsLit "GHC.Prim")   -- Primitive types and values
 gHC_TYPES       = mkPrimModule (fsLit "GHC.Types")
@@ -385,6 +404,9 @@ gHC_DESUGAR = mkBaseModule (fsLit "GHC.Desugar")
 rANDOM          = mkBaseModule (fsLit "System.Random")
 gHC_EXTS        = mkBaseModule (fsLit "GHC.Exts")
 cONTROL_EXCEPTION_BASE = mkBaseModule (fsLit "Control.Exception.Base")
+aPPLICATIVE_FIX = mkBaseModule (fsLit "Control.Applicative.Fix")
+aPPLICATIVE_GENERIFIX = mkBaseModule (fsLit "Control.Applicative.GeneriFix")
+aPPLICATIVE_COMPOSE = mkBaseModule (fsLit "Control.Applicative.Compose")
 
 gHC_PARR' :: Module
 gHC_PARR' = mkBaseModule (fsLit "GHC.PArr")
@@ -1025,6 +1047,24 @@ guardMName, liftMName, mzipName :: Name
 guardMName         = varQual mONAD (fsLit "guard") guardMIdKey
 liftMName          = varQual mONAD (fsLit "liftM") liftMIdKey
 mzipName           = varQual mONAD_ZIP (fsLit "mzip") mzipIdKey
+
+-- ApplicativeFix: alet definitions
+appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, whooName, phantom1TyConName, whoo1Name, tconsName, tnilName, wrapName, projTProdName, tHereName, tThereName :: Name
+appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") monadFixClassKey
+composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") ptrTyConKey
+tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") ptrTyConKey
+tnilTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TNil") ptrTyConKey
+tprodTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TProd") ptrTyConKey
+phantomTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom") ptrTyConKey
+whooName = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo") guardMIdKey
+phantom1TyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom1") ptrTyConKey
+whoo1Name = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo1") guardMIdKey
+tconsName = varQual aPPLICATIVE_GENERIFIX (fsLit ":::") guardMIdKey
+tnilName = varQual aPPLICATIVE_GENERIFIX (fsLit "TNil") guardMIdKey
+wrapName = varQual aPPLICATIVE_GENERIFIX (fsLit "Wrap") guardMIdKey
+projTProdName = varQual aPPLICATIVE_GENERIFIX (fsLit "projTProd") guardMIdKey
+tHereName = varQual aPPLICATIVE_GENERIFIX (fsLit "THere") guardMIdKey
+tThereName = varQual aPPLICATIVE_GENERIFIX (fsLit "TThere") guardMIdKey
 
 
 -- Annotation type checking

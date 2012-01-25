@@ -116,7 +116,6 @@ tc_cmd env (HsLet binds (L body_loc body)) res_ty
 			     tc_cmd env body res_ty
 	; return (HsLet binds' (L body_loc body')) }
 
-tc_cmd _env (HsAlet _ _) _ = panic "appfix: no alet's should appear in commands..."
 tc_cmd env in_cmd@(HsCase scrut matches) (stk, res_ty)
   = addErrCtxt (cmdCtxt in_cmd) $ do
       (scrut', scrut_ty) <- tcInferRho scrut 

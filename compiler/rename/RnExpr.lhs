@@ -236,10 +236,11 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet binds expr)
-  = rnLocalAletBindsAndThen binds           $ \ binds' ->
-    rnLExpr expr                         `thenM` \ (expr', fvExpr) ->
-    return (HsAlet binds' expr', fvExpr)
+rnExpr (HsAlet binds expr _)
+  = rnLocalAletBindsAndThen binds $ \binds' ->
+    do (expr', fvExpr) <- rnLExpr expr
+       (tooling, fvTooling) <- lookupAletTooling
+       return (HsAlet binds' expr' tooling, fvExpr `plusFV` fvTooling)
 
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))
@@ -453,8 +454,6 @@ convertOpFormsCmd (HsIf f exp c1 c2)
 convertOpFormsCmd (HsLet binds cmd)
   = HsLet binds (convertOpFormsLCmd cmd)
 
-convertOpFormsCmd (HsAlet binds cmd) = HsAlet binds (convertOpFormsLCmd cmd)
-
 convertOpFormsCmd (HsDo DoExpr stmts ty)
   = HsDo ArrowExpr (map (fmap convertOpFormsStmt) stmts) ty
     -- Mark the HsDo as begin the body of an arrow command
@@ -510,7 +509,6 @@ methodNamesCmd (HsIf _ _ c1 c2)
   = methodNamesLCmd c1 `plusFV` methodNamesLCmd c2 `addOneFV` choiceAName
 
 methodNamesCmd (HsLet _ c)      = methodNamesLCmd c
-methodNamesCmd (HsAlet _ c)      = methodNamesLCmd c
 methodNamesCmd (HsDo _ stmts _) = methodNamesStmts stmts 
 methodNamesCmd (HsApp c _)      = methodNamesLCmd c
 methodNamesCmd (HsLam match)    = methodNamesMatch match
@@ -874,6 +872,26 @@ lookupStmtName ctxt n
   where
     rebindable     = lookupSyntaxName n
     not_rebindable = return (HsVar n, emptyFVs)
+
+lookupAletTooling :: RnM (AletTooling Name, FreeVars)
+lookupAletTooling =
+  -- appfix TODO: Rebindable syntax?
+  return (MkAletTooling
+    (HsVar appfixClassName)
+    (HsVar composeTyConName)
+    (HsVar tconsTyConName)
+    (HsVar tnilTyConName)
+    (HsVar tprodTyConName)
+    (HsVar phantomTyConName)
+    (HsVar whooName)
+    (HsVar phantom1TyConName)
+    (HsVar whoo1Name)
+    (HsVar tconsName)
+    (HsVar tnilName)
+    (HsVar wrapName)
+    (HsVar projTProdName)
+    (HsVar tHereName)
+    (HsVar tThereName), emptyFVs)
 \end{code}
 
 Note [Renaming parallel Stmts]

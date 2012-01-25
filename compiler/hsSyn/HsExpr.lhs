@@ -101,6 +101,26 @@ type SyntaxTable id = [(Name, SyntaxExpr id)]
 noSyntaxTable :: SyntaxTable id
 noSyntaxTable = []
 
+data AletTooling idR = MkAletTooling {
+    atAppfixClass :: SyntaxExpr idR
+  , atComposeTyCon :: SyntaxExpr idR
+  , atTConsTyCon :: SyntaxExpr idR
+  , atTNilTyCon :: SyntaxExpr idR
+  , atTProdTyCon :: SyntaxExpr idR
+  , atPhantomTyCon :: SyntaxExpr idR
+  , atWhoo :: SyntaxExpr idR
+  , atPhantom1TyCon :: SyntaxExpr idR
+  , atWhoo1 :: SyntaxExpr idR
+  , atTCons :: SyntaxExpr idR
+  , atTNil :: SyntaxExpr idR
+  , atWrap :: SyntaxExpr idR
+  , atProjTProd :: SyntaxExpr idR
+  , atTHere :: SyntaxExpr idR
+  , atTThere :: SyntaxExpr idR
+  } deriving (Data, Typeable)
+
+noAletTooling :: AletTooling id
+noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr 
 
 -------------------------
 -- | A Haskell expression.
@@ -155,6 +175,9 @@ data HsExpr id
 
   | HsAlet      (HsLocalBinds id) -- alet (ApplicativeFix)
                 (LHsExpr  id)
+                (AletTooling id)  -- a record containing the stuff we need in the
+                                  -- alet transformation. This will be filled in by the
+                                  -- renamer
 
   | HsDo        (HsStmtContext Name) -- The parameterisation is unimportant
                                      -- because in this context we never use
@@ -470,7 +493,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr)
+ppr_expr (HsAlet binds expr _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
