@@ -332,7 +332,13 @@ dsExpr (HsLet binds body) = do
     body' <- dsLExpr body
     dsLocalBinds binds body'
 
-dsExpr (HsAlet _binds _body _tooling) = panic "appfix: not implemented"
+dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBinds)] _sigs)) _body _tooling) = do
+  let idForBind (L _ (FunBind (L _ id) _ _ _ _ _)) = return id
+      idForBind _ = panic "appfix: non-funBind in alet"
+  ids <- mapBagM idForBind lhsBinds
+  panic $ "appfix: not implemented, ids are :'" ++ show (bagToList ids) ++ "'"
+
+dsExpr (HsAlet _ _body _tooling) = panic "appfix: should not occur"
 
 -- We need the `ListComp' form to use `deListComp' (rather than the "do" form)
 -- because the interpretation of `stmts' depends on what sort of thing it is.
