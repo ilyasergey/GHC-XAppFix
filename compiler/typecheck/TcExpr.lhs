@@ -387,7 +387,12 @@ tcExpr (HsLet binds expr) res_ty
 			     tcMonoExpr expr res_ty   
 	; return (HsLet binds' expr') }
 
-tcExpr (HsAlet _binds _expr _aletTooling) _res_ty = panic "appfix: tcExpr not implemented"
+tcExpr (HsAlet binds expr _aletTooling) res_ty 
+  = do  { (binds', expr') <- tcAletBinds binds $
+                             -- appfix: TODO - (un)patch the environment for bound variables
+			     tcMonoExpr expr res_ty   
+	; return (HsLet binds' expr') }
+
 tcExpr (HsCase scrut matches) exp_ty
   = do	{  -- We used to typecheck the case alternatives first.
 	   -- The case patterns tend to give good type info to use

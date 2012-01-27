@@ -9,7 +9,8 @@ module TcBinds ( tcLocalBinds, tcTopBinds, tcRecSelBinds,
                  tcHsBootSigs, tcPolyBinds,
                  PragFun, tcSpecPrags, tcVectDecls, mkPragFun, 
                  TcSigInfo(..), SigFun, mkSigFun,
-                 badBootDeclErr ) where
+                 badBootDeclErr,
+                 tcAletBinds ) where
 
 import {-# SOURCE #-} TcMatches ( tcGRHSsPat, tcMatchesFun )
 import {-# SOURCE #-} TcExpr  ( tcMonoExpr )
@@ -1393,3 +1394,68 @@ patMonoBindsCtxt :: OutputableBndr id => LPat id -> GRHSs Name -> SDoc
 patMonoBindsCtxt pat grhss
   = hang (ptext (sLit "In a pattern binding:")) 2 (pprPatBind pat grhss)
 \end{code}
+
+
+%************************************************************************
+%*                                                                      *
+\subsection[AppFix-Binds]{Applicative Fix local bindings}
+%*                                                                      *
+%************************************************************************
+
+\begin{code}
+
+-- Type Checl 'alet' bindings
+
+tcAletBinds :: HsLocalBinds Name -> TcM thing
+             -> TcM (HsLocalBinds TcId, thing)
+
+tcAletBinds (HsValBinds (ValBindsOut binds sigs)) thing_inside
+  = do  { (binds', thing) <- tcAletValBinds NotTopLevel binds sigs thing_inside
+          -- todo replace val binds by own implementation
+        ; return (HsValBinds (ValBindsOut binds' sigs), thing) }
+
+tcAletBinds EmptyLocalBinds _ 
+  = panic "appfix: tcAletBinds not defined for empty bindings"
+tcAletBinds (HsValBinds (ValBindsIn {})) _
+  = panic "appfix: tcAletBinds not defined for non-processed in-bindings"
+tcAletBinds (HsIPBinds (IPBinds _ _)) _
+  = panic "appfix: tcAletBinds not defined for non-processed implicit parameter bindings"
+
+-- Type-check signatures and a group of alet-bindings
+tcAletValBinds :: TopLevelFlag 
+           -> [(RecFlag, LHsBinds Name)] -> [LSig Name]
+           -> TcM thing
+           -> TcM ([(RecFlag, LHsBinds TcId)], thing) 
+
+tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs thing_inside
+  = do  {
+        ; let { prag_fn = mkPragFun sigs (foldr (unionBags . snd) emptyBag binds)
+              ; ty_sigs = filter isTypeLSig sigs
+              ; sig_fn  = mkSigFun ty_sigs }
+
+        ; poly_ids <- concat <$> checkNoErrs (mapAndRecoverM tcTySig ty_sigs)
+
+        ; (bs', thing) <- tcExtendIdEnv poly_ids $
+                             tcSingleAletGroup top_lvl sig_fn prag_fn 
+                                               (bagToList bs) thing_inside
+
+        ; return ([(rec_flag, bs')], thing) }
+
+tcAletValBinds _ _ _ _ = panic "appfix: not strictly one recursive group in alet-bindings"
+
+-- Alet-bindings are treated as one mutually-recursive group
+tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
+                  -> [LHsBind Name]
+                  -> TcM thing
+                  -> TcM (LHsBinds TcId, thing)
+
+tcSingleAletGroup top_lvl sig_fn prag_fn binds thing_inside 
+  = do { (binds', ids, closed) <- tcPolyBinds top_lvl sig_fn prag_fn Recursive Recursive binds
+       ; thing <- tcExtendLetEnv closed ids thing_inside
+       ; return (binds', thing) }           
+
+
+
+
+
+\end{code} 
