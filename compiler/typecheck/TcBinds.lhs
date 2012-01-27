@@ -1450,11 +1450,32 @@ tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
                   -> TcM (LHsBinds TcId, thing)
 
 tcSingleAletGroup top_lvl sig_fn prag_fn binds thing_inside 
-  = do { (binds', ids, closed) <- tcPolyBinds top_lvl sig_fn prag_fn Recursive Recursive binds
+  = do { (binds', ids, closed) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds
        ; thing <- tcExtendLetEnv closed ids thing_inside
        ; return (binds', thing) }           
 
+-- Supply constraints and infer types
+-- appfix: TODO -- abstract over capture constraints
+tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
+                -> [LHsBind Name]
+                -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
+tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list
+  = setSrcSpan loc                              $
+    recoverM (recoveryCode binder_names sig_fn) $ do 
+        -- Set up main recover; take advantage of any type sigs
 
+    { traceTc "------------------------------------------------" empty
+    ; traceTc "Bindings for" (ppr binder_names)
+
+    -- Instantiate the polytypes of any binders that have signatures
+    -- (as determined by sig_fn), returning a TcSigInfo for each
+    ; tc_sig_fn <- tcInstSigs sig_fn binder_names
+
+    ; result <- tcPolyInfer True True tc_sig_fn prag_fn Recursive bind_list
+    ; return result }
+  where
+    binder_names = collectHsBindListBinders bind_list
+    loc = foldr1 combineSrcSpans (map getLoc bind_list)
 
 
 
