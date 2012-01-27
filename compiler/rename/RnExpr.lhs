@@ -883,15 +883,20 @@ lookupAletTooling =
     (HsVar tnilTyConName)
     (HsVar tprodTyConName)
     (HsVar phantomTyConName)
-    (HsVar whooName)
     (HsVar phantom1TyConName)
+    (HsVar listUTyConName)
+    (HsVar wrapTArrDTyConName)
+    (HsVar tElemTyConName)
+    (HsVar whooName)
     (HsVar whoo1Name)
     (HsVar tconsName)
     (HsVar tnilName)
     (HsVar wrapName)
-    (HsVar projTProdName)
     (HsVar tHereName)
-    (HsVar tThereName), emptyFVs)
+    (HsVar tThereName)
+    (HsVar projTProdName)
+    (HsVar nafix2Name)
+  , emptyFVs)
 \end{code}
 
 Note [Renaming parallel Stmts]

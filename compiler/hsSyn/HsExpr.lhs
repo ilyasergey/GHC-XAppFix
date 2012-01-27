@@ -108,19 +108,23 @@ data AletTooling idR = MkAletTooling {
   , atTNilTyCon :: SyntaxExpr idR
   , atTProdTyCon :: SyntaxExpr idR
   , atPhantomTyCon :: SyntaxExpr idR
-  , atWhoo :: SyntaxExpr idR
   , atPhantom1TyCon :: SyntaxExpr idR
+  , atListUTyCon :: SyntaxExpr idR
+  , atWrapTArrDTyCon :: SyntaxExpr idR
+  , atTElemTyCon :: SyntaxExpr idR
+  , atWhoo :: SyntaxExpr idR
   , atWhoo1 :: SyntaxExpr idR
   , atTCons :: SyntaxExpr idR
   , atTNil :: SyntaxExpr idR
   , atWrap :: SyntaxExpr idR
-  , atProjTProd :: SyntaxExpr idR
   , atTHere :: SyntaxExpr idR
   , atTThere :: SyntaxExpr idR
+  , atProjTProd :: SyntaxExpr idR
+  , atNafix2 :: SyntaxExpr idR
   } deriving (Data, Typeable)
 
 noAletTooling :: AletTooling id
-noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr 
+noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr 
 
 -------------------------
 -- | A Haskell expression.

@@ -1049,22 +1049,26 @@ liftMName          = varQual mONAD (fsLit "liftM") liftMIdKey
 mzipName           = varQual mONAD_ZIP (fsLit "mzip") mzipIdKey
 
 -- ApplicativeFix: alet definitions
-appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, whooName, phantom1TyConName, whoo1Name, tconsName, tnilName, wrapName, projTProdName, tHereName, tThereName :: Name
-appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") monadFixClassKey
-composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") ptrTyConKey
-tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") ptrTyConKey
-tnilTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TNil") ptrTyConKey
-tprodTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TProd") ptrTyConKey
-phantomTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom") ptrTyConKey
-whooName = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo") guardMIdKey
-phantom1TyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom1") ptrTyConKey
-whoo1Name = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo1") guardMIdKey
-tconsName = varQual aPPLICATIVE_GENERIFIX (fsLit ":::") guardMIdKey
-tnilName = varQual aPPLICATIVE_GENERIFIX (fsLit "TNil") guardMIdKey
-wrapName = varQual aPPLICATIVE_GENERIFIX (fsLit "Wrap") guardMIdKey
-projTProdName = varQual aPPLICATIVE_GENERIFIX (fsLit "projTProd") guardMIdKey
-tHereName = varQual aPPLICATIVE_GENERIFIX (fsLit "THere") guardMIdKey
-tThereName = varQual aPPLICATIVE_GENERIFIX (fsLit "TThere") guardMIdKey
+appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tElemTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, tHereName, tThereName, projTProdName, nafix2Name :: Name
+appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") appfixClassKey
+composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") composeTyConKey
+tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") tconsTyConKey
+tnilTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TNil") tnilTyConKey
+tprodTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TProd") tprodTyConKey
+phantomTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom") phantomTyConKey
+phantom1TyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom1") phantom1TyConKey
+listUTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "ListU") listUTyConKey
+wrapTArrDTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "WrapTArrD") wrapTArrDTyConKey
+tElemTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TElem") tElemTyConKey
+whooName = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo") whooDataConKey
+whoo1Name = varQual aPPLICATIVE_GENERIFIX (fsLit "Whoo1") whoo1DataConKey
+tconsName = varQual aPPLICATIVE_GENERIFIX (fsLit ":::") tconsDataConKey
+tnilName = varQual aPPLICATIVE_GENERIFIX (fsLit "TNil") tnilDataConKey
+wrapName = varQual aPPLICATIVE_GENERIFIX (fsLit "Wrap") wrapDataConKey
+tHereName = varQual aPPLICATIVE_GENERIFIX (fsLit "THere") tHereDataConKey
+tThereName = varQual aPPLICATIVE_GENERIFIX (fsLit "TThere") tThereDataConKey
+projTProdName = varQual aPPLICATIVE_GENERIFIX (fsLit "projTProd") projTProdIdKey
+nafix2Name = varQual aPPLICATIVE_GENERIFIX (fsLit "nafix2") nafix2IdKey
 
 
 -- Annotation type checking
@@ -1192,6 +1196,10 @@ gen1ClassKey  = mkPreludeClassUnique 38
 datatypeClassKey    = mkPreludeClassUnique 39
 constructorClassKey = mkPreludeClassUnique 40
 selectorClassKey    = mkPreludeClassUnique 41
+
+-- ApplicativeFix
+appfixClassKey :: Unique
+appfixClassKey = mkPreludeClassUnique 42
 \end{code}
 
 %************************************************************************
@@ -1374,6 +1382,18 @@ noSelTyConKey = mkPreludeTyConUnique 154
 repTyConKey  = mkPreludeTyConUnique 155
 rep1TyConKey = mkPreludeTyConUnique 156
 
+-- ApplicativeFix
+composeTyConKey, tconsTyConKey, tnilTyConKey, tprodTyConKey, phantomTyConKey, phantom1TyConKey, listUTyConKey, wrapTArrDTyConKey, tElemTyConKey :: Unique
+composeTyConKey = mkPreludeTyConUnique 157
+tconsTyConKey = mkPreludeTyConUnique 158
+tnilTyConKey = mkPreludeTyConUnique 159
+tprodTyConKey = mkPreludeTyConUnique 160
+phantomTyConKey = mkPreludeTyConUnique 161
+phantom1TyConKey = mkPreludeTyConUnique 162
+listUTyConKey = mkPreludeTyConUnique 163
+wrapTArrDTyConKey = mkPreludeTyConUnique 164
+tElemTyConKey = mkPreludeTyConUnique 165
+
 ---------------- Template Haskell -------------------
 --      USES TyConUniques 200-299
 -----------------------------------------------------
@@ -1432,6 +1452,16 @@ gtDataConKey                            = mkPreludeDataConUnique 29
 integerGmpSDataConKey, integerGmpJDataConKey :: Unique
 integerGmpSDataConKey                   = mkPreludeDataConUnique 30
 integerGmpJDataConKey                   = mkPreludeDataConUnique 31
+
+-- ApplicativeFix
+whooDataConKey, whoo1DataConKey, tconsDataConKey, tnilDataConKey, wrapDataConKey, tHereDataConKey, tThereDataConKey :: Unique
+whooDataConKey = mkPreludeDataConUnique 32
+whoo1DataConKey = mkPreludeDataConUnique 33
+tconsDataConKey = mkPreludeDataConUnique 34
+tnilDataConKey = mkPreludeDataConUnique 35
+wrapDataConKey = mkPreludeDataConUnique 36
+tHereDataConKey = mkPreludeDataConUnique 37
+tThereDataConKey = mkPreludeDataConUnique 38
 \end{code}
 
 %************************************************************************
@@ -1654,6 +1684,11 @@ mzipIdKey       = mkPreludeMiscIdUnique 196
 ---------------- Template Haskell -------------------
 --      USES IdUniques 200-499
 -----------------------------------------------------
+
+-- ApplicativeFix
+projTProdIdKey, nafix2IdKey :: Unique
+projTProdIdKey = mkPreludeMiscIdUnique 501
+nafix2IdKey = mkPreludeMiscIdUnique 502
 \end{code}
 
 
