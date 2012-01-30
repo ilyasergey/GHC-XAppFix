@@ -340,7 +340,7 @@ tcPolyBinds top_lvl sig_fn prag_fn rec_group rec_tc bind_list
     ; traceTc "Generalisation plan" (ppr plan)
     ; result@(_, poly_ids, _) <- case plan of
          NoGen          -> tcPolyNoGen tc_sig_fn prag_fn rec_tc bind_list
-         InferGen mn cl -> tcPolyInfer mn cl tc_sig_fn prag_fn rec_tc bind_list
+         InferGen mn cl -> tcPolyInfer mn cl tc_sig_fn prag_fn rec_tc bind_list captureConstraints
          CheckGen sig   -> tcPolyCheck sig prag_fn rec_tc bind_list
 
         -- Check whether strict bindings are ok
@@ -427,10 +427,11 @@ tcPolyInfer
   -> RecFlag       -- Whether it's recursive after breaking
                    -- dependencies based on type signatures
   -> [LHsBind Name]
+  -> (TcM (LHsBinds TcId, [MonoBindInfo]) -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints))
   -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
-tcPolyInfer mono closed tc_sig_fn prag_fn rec_tc bind_list
+tcPolyInfer mono closed tc_sig_fn prag_fn rec_tc bind_list constr_collect
   = do { ((binds', mono_infos), wanted) 
-             <- captureConstraints $
+             <- constr_collect $
                 tcMonoBinds tc_sig_fn LetLclBndr rec_tc bind_list
 
        ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
@@ -1421,7 +1422,7 @@ tcAletBinds (HsValBinds (ValBindsIn {})) _
 tcAletBinds (HsIPBinds (IPBinds _ _)) _
   = panic "appfix: tcAletBinds not defined for non-processed implicit parameter bindings"
 
--- Type-check signatures and a group of alet-bindings
+-- Type-check signatures and the group of alet-bindings
 tcAletValBinds :: TopLevelFlag 
            -> [(RecFlag, LHsBinds Name)] -> [LSig Name]
            -> TcM thing
@@ -1436,8 +1437,8 @@ tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs thing_inside
         ; poly_ids <- concat <$> checkNoErrs (mapAndRecoverM tcTySig ty_sigs)
 
         ; (bs', thing) <- tcExtendIdEnv poly_ids $
-                             tcSingleAletGroup top_lvl sig_fn prag_fn 
-                                               (bagToList bs) thing_inside
+                          tcSingleAletGroup top_lvl sig_fn prag_fn 
+                                            (bagToList bs) thing_inside
 
         ; return ([(rec_flag, bs')], thing) }
 
@@ -1455,28 +1456,35 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds thing_inside
        ; return (binds', thing) }           
 
 -- Supply constraints and infer types
--- appfix: TODO -- abstract over capture constraints
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
                 -> [LHsBind Name]
                 -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
 tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list
   = setSrcSpan loc                              $
     recoverM (recoveryCode binder_names sig_fn) $ do 
-        -- Set up main recover; take advantage of any type sigs
-
     { traceTc "------------------------------------------------" empty
     ; traceTc "Bindings for" (ppr binder_names)
 
-    -- Instantiate the polytypes of any binders that have signatures
-    -- (as determined by sig_fn), returning a TcSigInfo for each
     ; tc_sig_fn <- tcInstSigs sig_fn binder_names
+    ; result <- tcPolyInfer True True tc_sig_fn prag_fn Recursive bind_list $ 
+                appfixConstraints bind_list
 
-    ; result <- tcPolyInfer True True tc_sig_fn prag_fn Recursive bind_list
     ; return result }
   where
     binder_names = collectHsBindListBinders bind_list
     loc = foldr1 combineSrcSpans (map getLoc bind_list)
 
+-- Add 'alet'-specific constraints into the type environemnts
+-- before running an internal TC monad
+appfixConstraints :: [LHsBind Name] 
+                  -> TcM (LHsBinds TcId, [MonoBindInfo])
+                  -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints)
+appfixConstraints _bind_list thing_inside
+  = do { (res@(_binds', _mono_infos), original_wc) <- captureConstraints thing_inside
+       -- appfix: TODO -- add new constraints (see andWC)
+       -- use mono_infos to generate constraints for particulat bindings
+       -- ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
 
-
+       ; return (res, original_wc) }
+         
 \end{code} 
