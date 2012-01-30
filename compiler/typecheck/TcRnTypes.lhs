@@ -1431,6 +1431,7 @@ data CtOrigin
   | ProcOrigin		-- Arising from a proc expression
   | AnnOrigin           -- An annotation
   | FunDepOrigin
+  | AletOrigin           -- An applicative-fix definition
 
 data EqOrigin 
   = UnifyOrigin 
@@ -1457,6 +1458,7 @@ pprO (ArithSeqOrigin seq)  = hsep [ptext (sLit "the arithmetic sequence"), quote
 pprO (PArrSeqOrigin seq)   = hsep [ptext (sLit "the parallel array sequence"), quotes (ppr seq)]
 pprO SectionOrigin	   = ptext (sLit "an operator section")
 pprO TupleOrigin	   = ptext (sLit "a tuple")
+pprO AletOrigin	           = ptext (sLit "an applicative definition")
 pprO NegateOrigin	   = ptext (sLit "a use of syntactic negation")
 pprO ScOrigin	           = ptext (sLit "the superclasses of an instance declaration")
 pprO DerivOrigin	   = ptext (sLit "the 'deriving' clause of a data type declaration")
