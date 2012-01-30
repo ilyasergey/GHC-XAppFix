@@ -1481,21 +1481,25 @@ alet_constraints :: [LHsBind Name]
                   -> TcM (LHsBinds TcId, [MonoBindInfo])
                   -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints)
 alet_constraints _bind_list thing_inside
-  = do { (res@(_binds', _mono_infos), original_wc) <- captureConstraints thing_inside
+  = do { (res@(_binds', mono_infos), original_wc) <- captureConstraints thing_inside
        -- use mono_infos to generate constraints for particulat bindings
-       -- ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; (_p_type_var, appfix_wc) <- mkAppfixVar
-       ; let new_wc = appfix_wc `andWC` original_wc
+       ; let tps = [idType mono_id | (_, _, mono_id) <- mono_infos]
+       ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
+       
+       -- create new constraints
+       ; (p_type_var, appfix_wc) <- mk_var_constr arrow_kind appfixClassName
+       ; (b_type_var, app_wc) <- mk_var_constr arrow_kind applicativeClassName
+       ; compose_constrs <- mk_compose_contrs p_type_var b_type_var tps
+
+       ; let new_wc = compose_constrs `andWC` app_wc `andWC` appfix_wc `andWC` original_wc
 
        ; return (res, new_wc) }
 
--- create a new type variable p, such that ApplicativeFix p
-mkAppfixVar :: TcM (TcType, WantedConstraints)
-mkAppfixVar 
-  = do { p_type_var <- newFlexiTyVarTy $ 
-                       mkArrowKind liftedTypeKind liftedTypeKind
-
-       ; appfix_cls <- tcLookupClass appfixClassName
+-- create a new constrained type variable 
+mk_var_constr :: Kind -> Name -> TcM (TcType, WantedConstraints)
+mk_var_constr kind cls_name
+  = do { p_type_var <- newFlexiTyVarTy kind                   
+       ; appfix_cls <- tcLookupClass cls_name
        -- generate evidence variable for the forthcoming constraint
        ; ev_var <- newEvVar p_type_var 
        ; ct_loc <- getCtLoc AletOrigin
@@ -1507,5 +1511,23 @@ mkAppfixVar
              ; appfix_wc = mkFlatWC [appfix_ct] }
 
        ; return (p_type_var, appfix_wc) }
+
+-- make constraints of the form Compose p b v_i
+-- for bound variables' types
+-- appfix: TODO -- should be CFunEqCan (not dictionary!)
+mk_compose_contrs :: TcType -> TcType -> [TcType]
+                  -> TcM (WantedConstraints)
+mk_compose_contrs afix_var app_var bind_types
+  = do { cts <- mapM compose_constr bind_types
+       ; return $ mkFlatWC cts }
+  where compose_constr btp = do {
+        ; compose_cls <- tcLookupClass composeClassName
+        ; ev_var <- newEvVar btp 
+        ; ct_loc <- getCtLoc AletOrigin
+        ; return $ CDictCan { cc_id     = ev_var, 
+                              cc_flavor = Wanted ct_loc, 
+                              cc_tyargs = [afix_var, app_var, btp], 
+                              cc_class  = compose_cls,
+                              cc_depth  = 2 }}
          
 \end{code} 
