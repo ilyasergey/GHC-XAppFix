@@ -306,15 +306,19 @@ basicKnownKeyNames
         , tnilTyConName 
         , tprodTyConName
         , phantomTyConName
-        , whooName
         , phantom1TyConName
+        , listUTyConName
+        , wrapTArrDTyConName
+        , tElemTyConName
+        , whooName
         , whoo1Name
         , tconsName
         , tnilName
         , wrapName
-        , projTProdName
         , tHereName
         , tThereName
+        , projTProdName
+        , nafix2Name
     ]
 
 genericTyConNames :: [Name]
