@@ -678,10 +678,11 @@ dsAlet lhsBinds = do
       tsType = foldr (\t ts -> mkTyConApp tconsTyCon [t,ts]) tnilTy vTypes
       fixedType = mkTyConApp tprodTyCon [fType, tsType]
   _fixedVar <- newSysLocalDs fixedType
-  [tnilDataCon, tconsDataCon] <- mapM dsLookupDataCon [tnilName, tconsName]
+  [tnilDataCon, tconsDataCon, whooDataCon] <- mapM dsLookupDataCon [tnilName, tconsName, whooName]
   nafix2Fun <- Var <$> dsLookupGlobalId nafix2Name
   let tnilVal = mkCoreConApps tnilDataCon []
-      tsListU = foldr (\_t ts -> mkCoreConApps tconsDataCon [undefined, ts]) tnilVal vTypes
+      whooAtT t = mkCoreConApps whooDataCon [Type t]
+      tsListU = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal vTypes
       fixedImp = mkApps nafix2Fun [tsListU]
   pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ fixedImp-- dummy body
 
