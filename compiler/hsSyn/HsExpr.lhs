@@ -829,24 +829,22 @@ pprMatch ctxt (Match pats maybe_ty grhss)
   where
     (herald, other_pats)
         = case ctxt of
-            FunRhs fun is_infix
-                | not is_infix -> (ppr fun, pats)
-                        -- f x y z = e
-                        -- Not pprBndr; the AbsBinds will
-                        -- have printed the signature
-
-                | null pats2 -> (pp_infix, [])
-                        -- x &&& y = e
-
-                | otherwise -> (parens pp_infix, pats2)
-                        -- (x &&& y) z = e
-                where
-                  pp_infix = pprParendLPat pat1 <+> ppr fun <+> pprParendLPat pat2
-
+            FunRhs fun is_infix -> funBind fun is_infix
+            AletRhs fun is_infix -> funBind fun is_infix
             LambdaExpr -> (char '\\', pats)
 	    
             _  -> ASSERT( null pats1 )
                   (ppr pat1, [])	-- No parens around the single pat
+    funBind fun is_infix | not is_infix = (ppr fun, pats)
+                        -- f x y z = e
+                        -- Not pprBndr; the AbsBinds will
+                        -- have printed the signature
+                         | null pats2 = (pp_infix, [])
+                        -- x &&& y = e
+                         | otherwise = (parens pp_infix, pats2)
+                        -- (x &&& y) z = e
+                where
+                  pp_infix = pprParendLPat pat1 <+> ppr fun <+> pprParendLPat pat2
 
     (pat1:pats1) = pats
     (pat2:pats2) = pats1
@@ -1285,6 +1283,7 @@ pp_dotdot = ptext (sLit " .. ")
 \begin{code}
 data HsMatchContext id  -- Context of a Match
   = FunRhs id Bool              -- Function binding for f; True <=> written infix
+  | AletRhs id Bool             -- Alet binding; True <=> written infix
   | LambdaExpr                  -- Patterns of a lambda
   | CaseAlt                     -- Patterns and guards on a case alternative
   | ProcExpr                    -- Patterns of a proc
@@ -1336,6 +1335,7 @@ isMonadCompExpr _                    = False
 \begin{code}
 matchSeparator :: HsMatchContext id -> SDoc
 matchSeparator (FunRhs {})  = ptext (sLit "=")
+matchSeparator (AletRhs {}) = ptext (sLit "=")
 matchSeparator CaseAlt      = ptext (sLit "->")
 matchSeparator LambdaExpr   = ptext (sLit "->")
 matchSeparator ProcExpr     = ptext (sLit "->")
@@ -1352,11 +1352,14 @@ pprMatchContext ctxt
   | otherwise    = ptext (sLit "a")  <+> pprMatchContextNoun ctxt
   where
     want_an (FunRhs {}) = True	-- Use "an" in front
+    want_an (AletRhs {}) = True	-- Use "an" in front
     want_an ProcExpr    = True
     want_an _           = False
                  
 pprMatchContextNoun :: Outputable id => HsMatchContext id -> SDoc
 pprMatchContextNoun (FunRhs fun _)  = ptext (sLit "equation for")
+                                      <+> quotes (ppr fun)
+pprMatchContextNoun (AletRhs fun _) = ptext (sLit "alet equation for")
                                       <+> quotes (ppr fun)
 pprMatchContextNoun CaseAlt         = ptext (sLit "case alternative")
 pprMatchContextNoun RecUpd          = ptext (sLit "record-update construct")
@@ -1406,6 +1409,7 @@ pprStmtContext (TransStmtCtxt c)
 -- Used to generate the string for a *runtime* error message
 matchContextErrString :: Outputable id => HsMatchContext id -> SDoc
 matchContextErrString (FunRhs fun _)             = ptext (sLit "function") <+> ppr fun
+matchContextErrString (AletRhs fun _)            = ptext (sLit "alet definition") <+> ppr fun
 matchContextErrString CaseAlt                    = ptext (sLit "case")
 matchContextErrString PatBindRhs                 = ptext (sLit "pattern binding")
 matchContextErrString RecUpd                     = ptext (sLit "record update")

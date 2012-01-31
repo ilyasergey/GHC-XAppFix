@@ -1406,7 +1406,7 @@ patMonoBindsCtxt pat grhss
 
 \begin{code}
 
--- Type Checl 'alet' bindings
+-- Type Check 'alet' bindings
 
 tcAletBinds :: HsLocalBinds Name -> TcM thing
              -> TcM (HsLocalBinds TcId, thing)
@@ -1501,7 +1501,7 @@ mk_var_constr kind cls_name
   = do { p_type_var <- newFlexiTyVarTy kind                   
        ; appfix_cls <- tcLookupClass cls_name
        -- generate evidence variable for the forthcoming constraint
-       ; ev_var <- newEvVar p_type_var 
+       ; ev_var <- newEvVar $ mkClassPred appfix_cls [p_type_var]
        ; ct_loc <- getCtLoc AletOrigin
        ; let { appfix_ct = CDictCan { cc_id     = ev_var, 
                                       cc_flavor = Wanted ct_loc, 

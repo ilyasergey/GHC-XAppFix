@@ -87,6 +87,7 @@ matchCheck_really dflags ctx@(DsMatchContext hs_ctx _) vars ty qs
 
     incomplete_flag :: HsMatchContext id -> Bool
     incomplete_flag (FunRhs {})   = wopt Opt_WarnIncompletePatterns dflags
+    incomplete_flag (AletRhs {})  = wopt Opt_WarnIncompletePatterns dflags
     incomplete_flag CaseAlt       = wopt Opt_WarnIncompletePatterns dflags
 
     incomplete_flag LambdaExpr    = wopt Opt_WarnIncompleteUniPatterns dflags
