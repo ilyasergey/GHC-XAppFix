@@ -315,6 +315,8 @@ basicKnownKeyNames
         , tconsName
         , tnilName
         , wrapName
+        , mkCProdDataConName
+        , mkNilProdDataConName
         , tHereName
         , tThereName
         , projTProdName
@@ -1053,7 +1055,7 @@ liftMName          = varQual mONAD (fsLit "liftM") liftMIdKey
 mzipName           = varQual mONAD_ZIP (fsLit "mzip") mzipIdKey
 
 -- ApplicativeFix: alet definitions
-appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tElemTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, tHereName, tThereName, projTProdName, nafix2Name :: Name
+appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tElemTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, mkCProdDataConName, mkNilProdDataConName, tHereName, tThereName, projTProdName, nafix2Name :: Name
 appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") appfixClassKey
 composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") composeTyConKey
 tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") tconsTyConKey
@@ -1069,6 +1071,8 @@ whoo1Name = conName aPPLICATIVE_GENERIFIX (fsLit "Whoo1") whoo1DataConKey
 tconsName = conName aPPLICATIVE_GENERIFIX (fsLit ":::") tconsDataConKey
 tnilName = conName aPPLICATIVE_GENERIFIX (fsLit "TNil") tnilDataConKey
 wrapName = conName aPPLICATIVE_GENERIFIX (fsLit "Wrap") wrapDataConKey
+mkCProdDataConName = conName aPPLICATIVE_GENERIFIX (fsLit "MkCProd") mkCProdDataConKey
+mkNilProdDataConName = conName aPPLICATIVE_GENERIFIX (fsLit "MkNilProd") mkNilProdDataConKey
 tHereName = conName aPPLICATIVE_GENERIFIX (fsLit "THere") tHereDataConKey
 tThereName = conName aPPLICATIVE_GENERIFIX (fsLit "TThere") tThereDataConKey
 projTProdName = varQual aPPLICATIVE_GENERIFIX (fsLit "projTProd") projTProdIdKey
@@ -1458,7 +1462,7 @@ integerGmpSDataConKey                   = mkPreludeDataConUnique 30
 integerGmpJDataConKey                   = mkPreludeDataConUnique 31
 
 -- ApplicativeFix
-whooDataConKey, whoo1DataConKey, tconsDataConKey, tnilDataConKey, wrapDataConKey, tHereDataConKey, tThereDataConKey :: Unique
+whooDataConKey, whoo1DataConKey, tconsDataConKey, tnilDataConKey, wrapDataConKey, tHereDataConKey, tThereDataConKey, mkNilProdDataConKey, mkCProdDataConKey :: Unique
 whooDataConKey = mkPreludeDataConUnique 32
 whoo1DataConKey = mkPreludeDataConUnique 33
 tconsDataConKey = mkPreludeDataConUnique 34
@@ -1466,6 +1470,8 @@ tnilDataConKey = mkPreludeDataConUnique 35
 wrapDataConKey = mkPreludeDataConUnique 36
 tHereDataConKey = mkPreludeDataConUnique 37
 tThereDataConKey = mkPreludeDataConUnique 38
+mkNilProdDataConKey = mkPreludeDataConUnique 39
+mkCProdDataConKey = mkPreludeDataConUnique 40
 \end{code}
 
 %************************************************************************

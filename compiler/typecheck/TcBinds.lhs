@@ -45,7 +45,7 @@ import Util
 import BasicTypes
 import Outputable
 import FastString
-import PrelNames
+--import PrelNames
 
 import Control.Monad
 

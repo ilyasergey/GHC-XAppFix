@@ -236,11 +236,11 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet binds expr _)
-  = rnLocalAletBindsAndThen binds $ \binds' ->
-    do (expr', fvExpr) <- rnLExpr expr
-       (tooling, fvTooling) <- lookupAletTooling
-       return (HsAlet binds' expr' tooling, fvExpr `plusFV` fvTooling)
+rnExpr (HsAlet binds expr _ _)
+  = do (tooling, fvTooling) <- lookupAletTooling
+       rnLocalAletBindsAndThen binds $ \binds' ->
+         do (expr', fvExpr) <- rnLExpr expr
+            return (HsAlet binds' expr' aletMapEmpty tooling, fvExpr `plusFV` fvTooling)
 
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))

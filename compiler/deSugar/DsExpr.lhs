@@ -334,10 +334,10 @@ dsExpr (HsLet binds body) = do
     body' <- dsLExpr body
     dsLocalBinds binds body'
 
-dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) _body _tooling) =
+dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) _body _idsMap _tooling) =
   dsAlet $ bagToList lhsBindsBag
 
-dsExpr (HsAlet _ _body _tooling) = panic "appfix: should not occur"
+dsExpr (HsAlet _ _body _aletIdsMap _tooling) = panic "appfix: should not occur"
 
 -- We need the `ListComp' form to use `deListComp' (rather than the "do" form)
 -- because the interpretation of `stmts' depends on what sort of thing it is.
@@ -644,6 +644,7 @@ dsAlet [L _ (AbsBinds tvs evvs _exports _evbinds binds)] = do
      -- TODO: insert lambdas for tyvars and evvars and cast with export wrapper etc.
      return $ mkCoreLams tvs $ mkCoreLams evvs e
 dsAlet lhsBinds = do
+  -- generate the pattern functions..
   let idForBind (FunBind (L _ id) _ _ _ _ _) = id
       idForBind _ = panic "appfix: non-funBind in alet"
       ids = map (idForBind . unLoc) lhsBinds
@@ -656,11 +657,19 @@ dsAlet lhsBinds = do
                              _ -> panic "appfix: dsExpr: matchWrapper returns non-empty vs"
              _ -> panic "appfix: dsExpr: wrong type of bind"
   let pfuncs = map (mkLams ids) tRHSs
-  recIds <- mapM duplicateLocalDs ids
+  let composedTypes = map idType ids
+      recFunTy = mkFunTys composedTypes
+      mkRecId id = newUniqueId id (recFunTy (idType id))
+  recIds <- mapM mkRecId ids
   let mkPFuncBind recId pfunc body = Let (NonRec recId pfunc) body
       pfuncsBind body = foldr (uncurry mkPFuncBind) body (zip recIds pfuncs)
-      composedTypes = map idType ids
-      analyseComposedType t 
+  _ <- pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ mkIntLit 0
+
+  -- now generate the fixed values with a nafix2 call
+  -- first, get hold of the base library stuff we need
+  [tprodTyCon, tnilTyCon, tconsTyCon, _phantom1TyCon] <- mapM dsLookupTyCon [tprodTyConName, tnilTyConName, tconsTyConName, phantom1TyConName]
+  [tnilDataCon, tconsDataCon, _mkNilProdDataCon, _mkCProdDataCon, _wrapDataCon, whooDataCon] <- mapM dsLookupDataCon [tnilName, tconsName, mkNilProdDataConName, mkCProdDataConName, wrapName, whooName]
+  let analyseComposedType t 
         | ([bv], tb) <- tcSplitForAllTys t
         -- ^ appfix TODO: be more lenient?
         , (comp, [f, bv2, v]) <- tcSplitTyConApp tb
@@ -668,23 +677,29 @@ dsAlet lhsBinds = do
         , bv2v== bv
         , tyConName comp == composeTyConName
         = (f, v)
-      analyseComposedType _ = panic "appfix: dsExpr wrong type"
+      analyseComposedType t = pprPanic "appfix: dsExpr wrong type" $ ppr t
                               -- ^ should have been caught by the type checker...
       vTypes = map (snd . analyseComposedType) composedTypes
       fType = fst $ analyseComposedType $ head composedTypes 
               -- ^ assumption: at least one binding
-  [tprodTyCon, tnilTyCon, tconsTyCon] <- mapM dsLookupTyCon [tprodTyConName, tnilTyConName, tconsTyConName]
   let tnilTy = mkTyConApp tnilTyCon []
       tsType = foldr (\t ts -> mkTyConApp tconsTyCon [t,ts]) tnilTy vTypes
       fixedType = mkTyConApp tprodTyCon [fType, tsType]
-  _fixedVar <- newSysLocalDs fixedType
-  [tnilDataCon, tconsDataCon, whooDataCon] <- mapM dsLookupDataCon [tnilName, tconsName, whooName]
+  fixedVar <- newSysLocalDs fixedType
   nafix2Fun <- Var <$> dsLookupGlobalId nafix2Name
   let tnilVal = mkCoreConApps tnilDataCon []
       whooAtT t = mkCoreConApps whooDataCon [Type t]
       tsListU = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal vTypes
-      fixedImp = mkApps nafix2Fun [tsListU]
-  pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ fixedImp-- dummy body
+      -- mkNilProdVal = mkCoreConApps mkNilProdDataCon []
+      -- mkAnonPhantom1Id t = newSysLocalDs (mkTyConApp phantom1TyCon [t])
+      -- wrapPf pfId t = do --bId <- newSysLocalDs 
+      --                    anonPId <- mkAnonPhantom1Id undefined
+      --                    mkCoreConApps wrapDataCon [mkLams [anonPId] $ Var pfId]
+      --              -- ^ TODO: type arguments
+      -- fixpfs = foldr (\(pfId, t) ts -> mkCoreConApps mkCProdDataConName [wrapPf pfId t,ts]) mkNilProdVal (zip recIds vTypes)
+      --                    -- TODO: type arguments!
+      bindFixedImp = Let (NonRec fixedVar $ mkApps nafix2Fun [tsListU]) 
+  pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ bindFixedImp $ mkIntLit 3
 
 --dsAlet _ = panic "appfix: dsAlet: wrong type of bind..."
 \end{code}
