@@ -1497,7 +1497,7 @@ mkAppfixVar
 
        ; appfix_cls <- tcLookupClass appfixClassName
        -- generate evidence variable for the forthcoming constraint
-       ; ev_var <- newEvVar p_type_var 
+       ; ev_var <- newEvVar $ mkClassPred appfix_cls [p_type_var]
        ; ct_loc <- getCtLoc AletOrigin
        ; let { appfix_ct = CDictCan { cc_id     = ev_var, 
                                       cc_flavor = Wanted ct_loc, 
