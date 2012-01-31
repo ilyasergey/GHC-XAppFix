@@ -1471,14 +1471,16 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
                       -> TcType
                       -> TcM [TcId]           
-tcSwitchAletBindTypes _map ids _p_var
+tcSwitchAletBindTypes map ids _p_var
   = mapM process ids
   where process id 
           = do { let name = idName id
                ; tp <- newFlexiTyVarTy liftedTypeKind
-               ; new_id <- mkLocalBinder name tp 
-               -- todo add type constraint
-               ; return new_id }                    
+               ; case aletMapId map name of
+                 Just(new_name) -> do {
+                     new_id <- mkLocalBinder new_name tp   
+                   ; return new_id }
+                 _ -> panic "appfix: tcSwitchAletBindTypes" }                    
 
 -- Supply constraints and infer types
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
@@ -1542,7 +1544,7 @@ mk_compose_contrs afix_var bind_types
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; vi_var <- newFlexiTyVarTy liftedTypeKind
         ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
-        ; (app_var, app_ct) <- mk_var_constr arrow_kind applicativeClassName
+        ; (app_var, _app_ct) <- mk_var_constr arrow_kind applicativeClassName
         ; let t_args = [afix_var, app_var, vi_var]                   
         ; ev_var <- newEvVar $ mkEqPred (mkTyConApp comp_fn t_args, btp)
         ; ct_loc <- getCtLoc AletOrigin
@@ -1552,6 +1554,6 @@ mk_compose_contrs afix_var bind_types
                                    cc_tyargs = t_args, 
                                    cc_rhs    = btp,
                                    cc_depth  = 2 }
-        ; return [app_ct, fun_ct]}
+        ; return [{- app_ct,-} fun_ct]}
          
 \end{code} 
