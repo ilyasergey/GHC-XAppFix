@@ -1406,7 +1406,7 @@ patMonoBindsCtxt pat grhss
 
 \begin{code}
 
--- Type Checl 'alet' bindings
+-- Type Check 'alet' bindings
 
 tcAletBinds :: HsLocalBinds Name -> TcM thing
              -> TcM (HsLocalBinds TcId, thing)
