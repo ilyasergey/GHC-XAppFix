@@ -238,9 +238,9 @@ rnExpr (HsLet binds expr)
 
 rnExpr (HsAlet binds expr _ _)
   = do (tooling, fvTooling) <- lookupAletTooling
-       rnLocalAletBindsAndThen binds $ \binds' ->
+       rnLocalAletBindsAndThen binds $ \aletMapIds binds' ->
          do (expr', fvExpr) <- rnLExpr expr
-            return (HsAlet binds' expr' aletMapEmpty tooling, fvExpr `plusFV` fvTooling)
+            return (HsAlet binds' expr' aletMapIds tooling, fvExpr `plusFV` fvTooling)
 
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))

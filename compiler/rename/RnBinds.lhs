@@ -55,6 +55,7 @@ import FastString
 import Data.List	( partition )
 import Maybes		( orElse )
 import Control.Monad
+import UniqFM
 \end{code}
 
 -- ToDo: Put the annotations into the monad, so that they arrive in the proper
@@ -208,7 +209,7 @@ rnLocalBindsAndThen EmptyLocalBinds thing_inside
   = thing_inside EmptyLocalBinds
 
 rnLocalBindsAndThen (HsValBinds val_binds) thing_inside
-  = rnLocalValBindsPAndThen val_binds VBCNormal $ \ val_binds' -> 
+  = rnLocalValBindsPAndThen val_binds VBCNormal $ \ _ val_binds' -> 
       thing_inside (HsValBinds val_binds')
 
 rnLocalBindsAndThen (HsIPBinds binds) thing_inside = do
@@ -228,14 +229,15 @@ rnIPBind (IPBind n expr) = do
     return (IPBind n' expr', fvExpr)
 
 -- TODO: generate AletRhs as HsMatchContext in rnBind
-rnLocalAletBindsAndThen :: HsLocalBinds RdrName
-                           -> (HsLocalBinds Name -> RnM (result, FreeVars))
-                           -> RnM (result, FreeVars)
+rnLocalAletBindsAndThen ::
+  HsLocalBinds RdrName
+  -> (AletIdentMap Name -> HsLocalBinds Name -> RnM (result, FreeVars))
+  -> RnM (result, FreeVars)
 rnLocalAletBindsAndThen EmptyLocalBinds _thing_inside
   = panic "appfix: empty binds not allowed." 
 rnLocalAletBindsAndThen (HsValBinds val_binds) thing_inside
-  = rnLocalValBindsPAndThen val_binds VBCAlet $ \ val_binds' -> 
-      thing_inside (HsValBinds val_binds')
+  = rnLocalValBindsPAndThen val_binds VBCAlet $ \ aletIdentMap val_binds' -> 
+      thing_inside aletIdentMap (HsValBinds val_binds')
 rnLocalAletBindsAndThen (HsIPBinds _binds) _thing_inside = 
   panic "appfix: IP binds shouldn't be here..."
 \end{code}
@@ -303,12 +305,28 @@ depAnalBinds_ :: ValBindsContext -> Bag (LHsBind Name, [Name], Uses) -> ([(RecFl
 depAnalBinds_ VBCNormal = depAnalBinds
 depAnalBinds_ VBCAlet = depAnalBindsTriv
 
-bindNamesAndAddFixities ::
+bindNamesAndAddFixitiesBody ::
   ValBindsContext -> [Name] -> MiniFixityEnv ->
-  RnM (a, FreeVars) -> RnM (a, FreeVars)
-bindNamesAndAddFixities _vbC bound_names new_fixities thing_inside =
-  bindLocalNamesFV bound_names $
-  addLocalFixities new_fixities bound_names thing_inside 
+  (AletIdentMap Name -> RnM (a, FreeVars)) -> RnM (a, FreeVars)
+bindNamesAndAddFixitiesBody VBCNormal bound_names new_fixities thing_inside =
+  bindLocalNames bound_names $
+  addLocalFixities new_fixities bound_names $ thing_inside aletMapEmpty
+bindNamesAndAddFixitiesBody VBCAlet bound_names new_fixities thing_inside =
+  let duplicateName name = do u <- newUnique
+                              return $ mkSystemName u (nameOccName name)
+  in do 
+    nns <- mapM duplicateName bound_names
+    let aletMapIds = listToUFM $ zip bound_names nns
+    (res, fvs) <- 
+      bindLocalNames nns $
+      addLocalFixities new_fixities nns $
+      thing_inside aletMapIds
+    let redirectVar v =
+          case aletMapId aletMapIds v of
+            Nothing -> v
+            Just v' -> v'
+        modfvs = addListToNameSet emptyNameSet (map redirectVar $ nameSetToList fvs) 
+    return (res, modfvs)
 
 -- General version used both from the top-level and for local things
 -- Assumes the LHS vars are in scope
@@ -319,8 +337,6 @@ rnValBindsRHS :: HsSigCtxt
               -> RnM (HsValBinds Name, DefUses)
 rnValBindsRHS ctxt valbinds = rnValBindsRHSP ctxt valbinds VBCNormal
 
--- note: takes the dep analyser function as a parameter, so that we can 
--- do a trivial dep analysis for alet (ApplicativeFix) binds
 rnValBindsRHSP :: HsSigCtxt 
               -> HsValBindsLR Name RdrName
               -> ValBindsContext
@@ -352,8 +368,6 @@ rnLocalValBindsRHS :: NameSet  -- names bound by the LHSes
 rnLocalValBindsRHS bound_names binds
   = rnValBindsRHS (LocalBindCtxt bound_names) binds
 
--- note: takes the dep analyser function as a parameter, so that we can 
--- do a trivial dep analysis for alet (ApplicativeFix) binds
 rnLocalValBindsRHSP :: NameSet  -- names bound by the LHSes
                     -> HsValBindsLR Name RdrName
                     -> ValBindsContext
@@ -366,13 +380,10 @@ rnLocalValBindsRHSP bound_names binds vbC
 --
 -- here there are no local fixity decls passed in;
 -- the local fixity decls come from the ValBinds sigs
--- 
--- note: takes the dep analyser function as a parameter, so that we can 
--- do a trivial dep analysis for alet (ApplicativeFix) binds
-rnLocalValBindsPAndThen :: HsValBinds RdrName
-                        -> ValBindsContext
-                        -> (HsValBinds Name -> RnM (result, FreeVars))
-                        -> RnM (result, FreeVars)
+rnLocalValBindsPAndThen ::
+  HsValBinds RdrName -> ValBindsContext
+  -> (AletIdentMap Name -> HsValBinds Name -> RnM (result, FreeVars))
+  -> RnM (result, FreeVars)
 rnLocalValBindsPAndThen binds@(ValBindsIn _ sigs) vbC thing_inside 
  = do	{     -- (A) Create the local fixity environment 
 	  new_fixities <- makeMiniFixityEnv [L loc sig | L loc (FixSig sig) <- sigs]
@@ -381,12 +392,16 @@ rnLocalValBindsPAndThen binds@(ValBindsIn _ sigs) vbC thing_inside
 	; (bound_names, new_lhs) <- rnLocalValBindsLHS new_fixities binds
 
 	      --     ...and bring them (and their fixities) into scope
-	; bindNamesAndAddFixities vbC bound_names new_fixities $ do
-
-	{      -- (C) Do the RHS and thing inside
-	  (binds', dus) <- rnLocalValBindsRHSP (mkNameSet bound_names) new_lhs vbC
-        ; (result, result_fvs) <- thing_inside binds'
-
+        -- (C1) First for the RHSs 
+	; (binds', dus) <-
+          bindLocalNames bound_names $
+            addLocalFixities new_fixities bound_names $ 
+            rnLocalValBindsRHSP (mkNameSet bound_names) new_lhs vbC
+        -- (C2) Then for the thing inside (works differently for alet)
+	; (result, result_fvs) <-
+          bindNamesAndAddFixitiesBody vbC bound_names new_fixities $ \aletIdentMap ->
+            thing_inside aletIdentMap binds'
+	; 
 		-- Report unused bindings based on the (accurate) 
 		-- findUses.  E.g.
 		-- 	let x = x in 3
@@ -415,9 +430,8 @@ rnLocalValBindsPAndThen binds@(ValBindsIn _ sigs) vbC thing_inside
 		-- But note that this means we won't report 'x' as unused, 
 		-- whereas we would if we had { x = 3; p = x; y = 'x' }
 
-	; return (result, all_uses) }}
-         	-- The bound names are pruned out of all_uses
-	        -- by the bindLocalNamesFV call above
+	; return (result, delFVs bound_names all_uses) }
+         	-- Prune out the bound names, we've just warned about those..
 
 rnLocalValBindsPAndThen bs _ _ = pprPanic "rnLocalValBindsPAndThen" (ppr bs)
 
