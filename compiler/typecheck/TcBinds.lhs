@@ -1478,8 +1478,8 @@ tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list
 -- Add 'alet'-specific constraints into the type environemnts
 -- before running an internal TC monad
 alet_constraints :: [LHsBind Name] 
-                  -> TcM (LHsBinds TcId, [MonoBindInfo])
-                  -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints)
+                 -> TcM (LHsBinds TcId, [MonoBindInfo])
+                 -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints)
 alet_constraints _bind_list thing_inside
   = do { (res@(_binds', mono_infos), original_wc) <- captureConstraints thing_inside
        -- use mono_infos to generate constraints for particulat bindings
@@ -1487,47 +1487,52 @@ alet_constraints _bind_list thing_inside
        ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
        
        -- create new constraints
-       ; (p_type_var, appfix_wc) <- mk_var_constr arrow_kind appfixClassName
-       ; (b_type_var, app_wc) <- mk_var_constr arrow_kind applicativeClassName
-       ; compose_constrs <- mk_compose_contrs p_type_var b_type_var tps
+       ; (p_type_var, appfix_ct) <- mk_var_constr arrow_kind appfixClassName
+       ; compose_constrs <- mk_compose_contrs p_type_var tps
 
-       ; let new_wc = compose_constrs `andWC` app_wc `andWC` appfix_wc `andWC` original_wc
+       ; let new_wc = ( compose_constrs         `andWC` 
+                        (mkFlatWC [appfix_ct])  `andWC` 
+                        original_wc )
 
        ; return (res, new_wc) }
 
 -- create a new constrained type variable 
-mk_var_constr :: Kind -> Name -> TcM (TcType, WantedConstraints)
+mk_var_constr :: Kind -> Name -> TcM (TcType, Ct)
 mk_var_constr kind cls_name
   = do { p_type_var <- newFlexiTyVarTy kind                   
-       ; appfix_cls <- tcLookupClass cls_name
+       ; constr_cls <- tcLookupClass cls_name
        -- generate evidence variable for the forthcoming constraint
-       ; ev_var <- newEvVar $ mkClassPred appfix_cls [p_type_var]
+       ; ev_var <- newEvVar $ mkClassPred constr_cls [p_type_var]
        ; ct_loc <- getCtLoc AletOrigin
-       ; let { appfix_ct = CDictCan { cc_id     = ev_var, 
-                                      cc_flavor = Wanted ct_loc, 
-                                      cc_tyargs = [p_type_var], 
-                                      cc_class  = appfix_cls,
-                                      cc_depth  = 2 }
-             ; appfix_wc = mkFlatWC [appfix_ct] }
+       ; let class_ct = CDictCan { cc_id     = ev_var, 
+                                   cc_flavor = Wanted ct_loc, 
+                                   cc_tyargs = [p_type_var], 
+                                   cc_class  = constr_cls,
+                                   cc_depth  = 2 }
 
-       ; return (p_type_var, appfix_wc) }
+       ; return (p_type_var, class_ct) }
 
 -- make constraints of the form Compose p b v_i
 -- for bound variables' types
--- appfix: TODO -- should be CFunEqCan (not dictionary!)
-mk_compose_contrs :: TcType -> TcType -> [TcType]
-                  -> TcM (WantedConstraints)
-mk_compose_contrs afix_var app_var bind_types
+mk_compose_contrs :: TcType -> [TcType]
+                  -> TcM (WantedConstraints) 
+mk_compose_contrs afix_var bind_types
   = do { cts <- mapM compose_constr bind_types
-       ; return $ mkFlatWC cts }
+       ; return $ mkFlatWC $ concat cts }
   where compose_constr btp = do {
-        ; compose_cls <- tcLookupClass composeClassName
-        ; ev_var <- newEvVar btp 
+        ; comp_fn <- tcLookupTyCon composeTyConName
+        ; vi_var <- newFlexiTyVarTy liftedTypeKind
+        ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
+        ; (app_var, app_ct) <- mk_var_constr arrow_kind applicativeClassName
+        ; let t_args = [afix_var, app_var, vi_var]                   
+        ; ev_var <- newEvVar $ mkEqPred (mkTyConApp comp_fn t_args, btp)
         ; ct_loc <- getCtLoc AletOrigin
-        ; return $ CDictCan { cc_id     = ev_var, 
-                              cc_flavor = Wanted ct_loc, 
-                              cc_tyargs = [afix_var, app_var, btp], 
-                              cc_class  = compose_cls,
-                              cc_depth  = 2 }}
+        ; let fun_ct = CFunEqCan { cc_id     = ev_var, 
+                                   cc_flavor = Wanted ct_loc, 
+                                   cc_fun    = comp_fn,                                        
+                                   cc_tyargs = t_args, 
+                                   cc_rhs    = btp,
+                                   cc_depth  = 2 }
+        ; return [app_ct, fun_ct]}
          
 \end{code} 
