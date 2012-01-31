@@ -33,6 +33,7 @@ import HsSyn
 import TcType
 import TcEvidence
 import Type
+import TyCon (tyConName)
 import CoreSyn
 import CoreUtils
 import CoreFVs
@@ -56,6 +57,7 @@ import Outputable
 import FastString
 
 import Control.Monad
+--import Control.Applicative (liftA2)
 \end{code}
 
 
@@ -332,11 +334,8 @@ dsExpr (HsLet binds body) = do
     body' <- dsLExpr body
     dsLocalBinds binds body'
 
-dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBinds)] _sigs)) _body _tooling) = do
-  let idForBind (L _ (FunBind (L _ id) _ _ _ _ _)) = return id
-      idForBind _ = panic "appfix: non-funBind in alet"
-  ids <- mapBagM idForBind lhsBinds
-  panic $ "appfix: not implemented, ids are :'" ++ show (bagToList ids) ++ "'"
+dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) _body _tooling) =
+  dsAlet $ bagToList lhsBindsBag
 
 dsExpr (HsAlet _ _body _tooling) = panic "appfix: should not occur"
 
@@ -630,6 +629,65 @@ findField rbinds lbl
   = [rhs | HsRecField { hsRecFieldId = id, hsRecFieldArg = rhs } <- rbinds 
          , lbl == idName (unLoc id) ]
 \end{code}
+
+
+%--------------------------------------------------------------------
+Desugaring the alet construct
+
+\begin{code}
+
+dsAlet :: [LHsBind Id] -> DsM CoreExpr
+dsAlet [L _ (AbsBinds tvs evvs _exports _evbinds binds)] = do
+  -- an alet should contain one list of mutually recursive binds
+  -- however, here
+  do e <- dsAlet $ bagToList binds
+     -- TODO: insert lambdas for tyvars and evvars and cast with export wrapper etc.
+     return $ mkCoreLams tvs $ mkCoreLams evvs e
+dsAlet lhsBinds = do
+  let idForBind (FunBind (L _ id) _ _ _ _ _) = id
+      idForBind _ = panic "appfix: non-funBind in alet"
+      ids = map (idForBind . unLoc) lhsBinds
+  -- pprDefiniteTrace "dsAlet" (ppr ids) $ do
+  tRHSs <- flip mapM lhsBinds $
+           \v -> case v of 
+             (L _ (FunBind (L _ id) is_infix matches co_fn _ _tick)) ->
+               do (vs, rhs) <- matchWrapper (AletRhs (idName id) is_infix) matches
+                  case vs of [] -> return $ dsHsWrapper co_fn rhs
+                             _ -> panic "appfix: dsExpr: matchWrapper returns non-empty vs"
+             _ -> panic "appfix: dsExpr: wrong type of bind"
+  let pfuncs = map (mkLams ids) tRHSs
+  recIds <- mapM duplicateLocalDs ids
+  let mkPFuncBind recId pfunc body = Let (NonRec recId pfunc) body
+      pfuncsBind body = foldr (uncurry mkPFuncBind) body (zip recIds pfuncs)
+      composedTypes = map idType ids
+      analyseComposedType t 
+        | ([bv], tb) <- tcSplitForAllTys t
+        -- ^ appfix TODO: be more lenient?
+        , (comp, [f, bv2, v]) <- tcSplitTyConApp tb
+        , Just bv2v <- tcGetTyVar_maybe bv2
+        , bv2v== bv
+        , tyConName comp == composeTyConName
+        = (f, v)
+      analyseComposedType _ = panic "appfix: dsExpr wrong type"
+                              -- ^ should have been caught by the type checker...
+      vTypes = map (snd . analyseComposedType) composedTypes
+      fType = fst $ analyseComposedType $ head composedTypes 
+              -- ^ assumption: at least one binding
+  [tprodTyCon, tnilTyCon, tconsTyCon] <- mapM dsLookupTyCon [tprodTyConName, tnilTyConName, tconsTyConName]
+  let tnilTy = mkTyConApp tnilTyCon []
+      tsType = foldr (\t ts -> mkTyConApp tconsTyCon [t,ts]) tnilTy vTypes
+      fixedType = mkTyConApp tprodTyCon [fType, tsType]
+  _fixedVar <- newSysLocalDs fixedType
+  [tnilDataCon, tconsDataCon] <- mapM dsLookupDataCon [tnilName, tconsName]
+  nafix2Fun <- Var <$> dsLookupGlobalId nafix2Name
+  let tnilVal = mkCoreConApps tnilDataCon []
+      tsListU = foldr (\_t ts -> mkCoreConApps tconsDataCon [undefined, ts]) tnilVal vTypes
+      fixedImp = mkApps nafix2Fun [tsListU]
+  pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ fixedImp-- dummy body
+
+--dsAlet _ = panic "appfix: dsAlet: wrong type of bind..."
+\end{code}
+
 
 %--------------------------------------------------------------------
 

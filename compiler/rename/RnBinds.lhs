@@ -227,11 +227,12 @@ rnIPBind (IPBind n expr) = do
     (expr',fvExpr) <- rnLExpr expr
     return (IPBind n' expr', fvExpr)
 
+-- TODO: generate AletRhs as HsMatchContext in rnBind
 rnLocalAletBindsAndThen :: HsLocalBinds RdrName
                            -> (HsLocalBinds Name -> RnM (result, FreeVars))
                            -> RnM (result, FreeVars)
-rnLocalAletBindsAndThen EmptyLocalBinds thing_inside
-  = thing_inside EmptyLocalBinds
+rnLocalAletBindsAndThen EmptyLocalBinds _thing_inside
+  = panic "appfix: empty binds not allowed." 
 rnLocalAletBindsAndThen (HsValBinds val_binds) thing_inside
   = rnLocalValBindsPAndThen val_binds depAnalBindsTriv $ \ val_binds' -> 
       thing_inside (HsValBinds val_binds')
@@ -324,7 +325,7 @@ rnValBindsRHSP ctxt (ValBindsIn mbinds sigs) depAnalBinds_
 			       -- the uses in the sigs
        }
 
-rnValBindsRHSP _ b _ = pprPanic "rnValBindsRHS" (ppr b)
+rnValBindsRHSP _ b _ = pprPanic "rnValBindsRHSP" (ppr b)
 
 -- Wrapper for local binds
 --
