@@ -15,7 +15,7 @@ TcPat: Typechecking patterns
 
 module TcPat ( tcLetPat, TcSigFun, TcSigInfo(..), TcPragFun 
              , LetBndrSpec(..), addInlinePrags, warnPrags
-             , tcPat, tcPats, newNoSigLetBndr, newSigLetBndr
+             , tcPat, tcPats, newNoSigLetBndr, newSigLetBndr, mkLocalBinder
 	     , addDataConStupidTheta, badFieldCon, polyPatSig ) where
 
 #include "HsVersions.h"

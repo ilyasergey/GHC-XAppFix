@@ -387,9 +387,8 @@ tcExpr (HsLet binds expr) res_ty
 			     tcMonoExpr expr res_ty   
 	; return (HsLet binds' expr') }
 
-tcExpr (HsAlet binds expr _aletIdsMap _aletTooling) res_ty 
-  = do  { (binds', expr') <- tcAletBinds binds $
-                             -- appfix: TODO - (un)patch the environment for bound variables
+tcExpr (HsAlet binds expr aletIdsMap _aletTooling) res_ty 
+  = do  { (binds', expr') <- tcAletBinds binds aletIdsMap $
 			     tcMonoExpr expr res_ty   
 	; return (HsAlet binds' expr' aletMapEmpty (panic "appfix: aletTooling not yet used, no rebindable syntax yet")) }
 
