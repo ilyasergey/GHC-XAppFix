@@ -45,7 +45,7 @@ import Util
 import BasicTypes
 import Outputable
 import FastString
-import PrelNames
+--import PrelNames
 
 import Control.Monad
 
@@ -1484,28 +1484,28 @@ alet_constraints _bind_list thing_inside
   = do { (res@(_binds', _mono_infos), original_wc) <- captureConstraints thing_inside
        -- use mono_infos to generate constraints for particulat bindings
        -- ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; (_p_type_var, appfix_wc) <- mkAppfixVar
-       ; let new_wc = appfix_wc `andWC` original_wc
+       --; (_p_type_var, appfix_wc) <- mkAppfixVar
+       --; let new_wc = appfix_wc `andWC` original_wc
 
-       ; return (res, new_wc) }
+       ; return (res, original_wc) }
 
 -- create a new type variable p, such that ApplicativeFix p
-mkAppfixVar :: TcM (TcType, WantedConstraints)
-mkAppfixVar 
-  = do { p_type_var <- newFlexiTyVarTy $ 
-                       mkArrowKind liftedTypeKind liftedTypeKind
+-- mkAppfixVar :: TcM (TcType, WantedConstraints)
+-- mkAppfixVar 
+--   = do { p_type_var <- newFlexiTyVarTy $ 
+--                        mkArrowKind liftedTypeKind liftedTypeKind
 
-       ; appfix_cls <- tcLookupClass appfixClassName
-       -- generate evidence variable for the forthcoming constraint
-       ; ev_var <- newEvVar $ mkClassPred appfix_cls [p_type_var]
-       ; ct_loc <- getCtLoc AletOrigin
-       ; let { appfix_ct = CDictCan { cc_id     = ev_var, 
-                                      cc_flavor = Wanted ct_loc, 
-                                      cc_tyargs = [p_type_var], 
-                                      cc_class  = appfix_cls,
-                                      cc_depth  = 2 }
-             ; appfix_wc = mkFlatWC [appfix_ct] }
+--        ; appfix_cls <- tcLookupClass appfixClassName
+--        -- generate evidence variable for the forthcoming constraint
+--        ; ev_var <- newEvVar $ mkClassPred appfix_cls [p_type_var]
+--        ; ct_loc <- getCtLoc AletOrigin
+--        ; let { appfix_ct = CDictCan { cc_id     = ev_var, 
+--                                       cc_flavor = Wanted ct_loc, 
+--                                       cc_tyargs = [p_type_var], 
+--                                       cc_class  = appfix_cls,
+--                                       cc_depth  = 2 }
+--              ; appfix_wc = mkFlatWC [appfix_ct] }
 
-       ; return (p_type_var, appfix_wc) }
+--        ; return (p_type_var, appfix_wc) }
          
 \end{code} 

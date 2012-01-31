@@ -475,7 +475,7 @@ addTickHsExpr (HsLet binds e) =
 	liftM2 HsLet
 		(addTickHsLocalBinds binds) -- to think about: !patterns.
                 (addTickLHsExprLetBody e)
-addTickHsExpr (HsAlet _binds _e _tooling) = panic "appfix: addTickHsExpr not implemented"
+addTickHsExpr (HsAlet _binds _e _aletIdsMap _tooling) = panic "appfix: addTickHsExpr not implemented"
 addTickHsExpr (HsDo cxt stmts srcloc) 
   = do { (stmts', _) <- addTickLStmts' forQual stmts (return ())
        ; return (HsDo cxt stmts' srcloc) }

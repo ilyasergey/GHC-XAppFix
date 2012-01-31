@@ -36,6 +36,8 @@ import Util( dropTail )
 import StaticFlags( opt_PprStyle_Debug )
 import Outputable
 import FastString
+import Unique
+import UniqFM
 
 -- libraries:
 import Data.Data hiding (Fixity)
@@ -126,6 +128,14 @@ data AletTooling idR = MkAletTooling {
 noAletTooling :: AletTooling id
 noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr 
 
+-- a map of the names of binders inside the alet to the corresponding names
+-- which are in scope in the "in"-branch
+type AletIdentMap id = UniqFM id
+aletMapId :: Uniquable id => AletIdentMap id -> id -> Maybe id
+aletMapId = lookupUFM
+aletMapEmpty :: AletIdentMap id
+aletMapEmpty = emptyUFM
+
 -------------------------
 -- | A Haskell expression.
 data HsExpr id
@@ -179,6 +189,7 @@ data HsExpr id
 
   | HsAlet      (HsLocalBinds id) -- alet (ApplicativeFix)
                 (LHsExpr  id)
+                (AletIdentMap id)
                 (AletTooling id)  -- a record containing the stuff we need in the
                                   -- alet transformation. This will be filled in by the
                                   -- renamer
@@ -497,7 +508,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr _)
+ppr_expr (HsAlet binds expr _ _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
