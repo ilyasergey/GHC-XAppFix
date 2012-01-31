@@ -1471,14 +1471,25 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
                       -> TcType
                       -> TcM [TcId]           
-tcSwitchAletBindTypes map ids _p_var
+tcSwitchAletBindTypes map ids p_var
   = mapM process ids
   where process id 
           = do { let name = idName id
-               ; tp <- newFlexiTyVarTy liftedTypeKind
+               ; tc_var <- newFlexiTyVar liftedTypeKind
+               ; bogus_tc_var <- newFlexiTyVarTy liftedTypeKind -- TODO - remove
+               ; let tp = mkTyVarTy tc_var
+               ; ev_var <- newEvVar $ mkEqPred (mkAppTy p_var bogus_tc_var, tp)
+               ; ct_loc <- getCtLoc AletOrigin
+               ; let eq_ct = CTyEqCan { cc_id = ev_var, 
+                                        cc_flavor = Wanted ct_loc, 
+                                        cc_tyvar  = tc_var, 
+                                        cc_rhs = mkAppTy p_var tp,
+                                        cc_depth = 2 }
+               
                ; case aletMapId map name of
                  Just(new_name) -> do {
-                     new_id <- mkLocalBinder new_name tp   
+                   ; new_id <- mkLocalBinder new_name tp
+                   ; emitConstraints $ mkFlatWC [eq_ct]
                    ; return new_id }
                  _ -> panic "appfix: tcSwitchAletBindTypes" }                    
 
