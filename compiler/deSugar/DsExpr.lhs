@@ -33,7 +33,7 @@ import HsSyn
 import TcType
 import TcEvidence
 import Type
-import TyCon (tyConName)
+import TyCon
 import CoreSyn
 import CoreUtils
 import CoreFVs
@@ -644,6 +644,13 @@ dsAlet [L _ (AbsBinds tvs evvs _exports _evbinds binds)] = do
      -- TODO: insert lambdas for tyvars and evvars and cast with export wrapper etc.
      return $ mkCoreLams tvs $ mkCoreLams evvs e
 dsAlet lhsBinds = do
+  -- first, get hold of the base library stuff we need
+  [applicativeClassTyCon] <- mapM dsLookupTyCon [applicativeClassName]
+  let [Just _applicativeClass] = map tyConClass_maybe [applicativeClassTyCon]
+  [tprodTyCon, tnilTyCon, tconsTyCon, phantom1TyCon] <- mapM dsLookupTyCon [tprodTyConName, tnilTyConName, tconsTyConName, phantom1TyConName]
+  [tnilDataCon, tconsDataCon, mkNilProdDataCon, mkCProdDataCon, wrapDataCon, whooDataCon] <- mapM dsLookupDataCon [tnilName, tconsName, mkNilProdDataConName, mkCProdDataConName, wrapName, whooName]
+  [nafix2Fun, _projTProdFun] <- mapM ((Var <$>) . dsLookupGlobalId) [nafix2Name,projTProdName]
+  
   -- generate the pattern functions..
   let idForBind (FunBind (L _ id) _ _ _ _ _) = id
       idForBind _ = panic "appfix: non-funBind in alet"
@@ -666,13 +673,15 @@ dsAlet lhsBinds = do
   _ <- pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ mkIntLit 0
 
   -- now generate the fixed values with a nafix2 call
-  -- first, get hold of the base library stuff we need
-  [tprodTyCon, tnilTyCon, tconsTyCon, _phantom1TyCon] <- mapM dsLookupTyCon [tprodTyConName, tnilTyConName, tconsTyConName, phantom1TyConName]
-  [tnilDataCon, tconsDataCon, _mkNilProdDataCon, _mkCProdDataCon, _wrapDataCon, whooDataCon] <- mapM dsLookupDataCon [tnilName, tconsName, mkNilProdDataConName, mkCProdDataConName, wrapName, whooName]
   let analyseComposedType t 
         | ([bv], tb) <- tcSplitForAllTys t
         -- ^ appfix TODO: be more lenient?
-        , (comp, [f, bv2, v]) <- tcSplitTyConApp tb
+        , Just (dictAppBTy, tb2) <- tcSplitFunTy_maybe tb
+        , (app, [bv3]) <- tcSplitTyConApp dictAppBTy
+        , tyConName app == applicativeClassName
+        , Just bv3v <- tcGetTyVar_maybe bv3
+        , bv3v == bv
+        , (comp, [f, bv2, v]) <- tcSplitTyConApp tb2
         , Just bv2v <- tcGetTyVar_maybe bv2
         , bv2v== bv
         , tyConName comp == composeTyConName
@@ -686,19 +695,28 @@ dsAlet lhsBinds = do
       tsType = foldr (\t ts -> mkTyConApp tconsTyCon [t,ts]) tnilTy vTypes
       fixedType = mkTyConApp tprodTyCon [fType, tsType]
   fixedVar <- newSysLocalDs fixedType
-  nafix2Fun <- Var <$> dsLookupGlobalId nafix2Name
-  let tnilVal = mkCoreConApps tnilDataCon []
+  let mkTypeListTy = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal 
+  let starToStar = mkArrowKind liftedTypeKind liftedTypeKind
+      tnilVal = mkCoreConApps tnilDataCon []
       whooAtT t = mkCoreConApps whooDataCon [Type t]
-      tsListU = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal vTypes
-      -- mkNilProdVal = mkCoreConApps mkNilProdDataCon []
-      -- mkAnonPhantom1Id t = newSysLocalDs (mkTyConApp phantom1TyCon [t])
-      -- wrapPf pfId t = do --bId <- newSysLocalDs 
-      --                    anonPId <- mkAnonPhantom1Id undefined
-      --                    mkCoreConApps wrapDataCon [mkLams [anonPId] $ Var pfId]
-      --              -- ^ TODO: type arguments
-      -- fixpfs = foldr (\(pfId, t) ts -> mkCoreConApps mkCProdDataConName [wrapPf pfId t,ts]) mkNilProdVal (zip recIds vTypes)
-      --                    -- TODO: type arguments!
-      bindFixedImp = Let (NonRec fixedVar $ mkApps nafix2Fun [tsListU]) 
+      tsListU = mkTypeListTy vTypes
+      mkNilProdVal = mkCoreConApps mkNilProdDataCon []
+      mkAnonPhantom1Id t = newSysLocalDs (mkTyConApp phantom1TyCon [t])
+      wrapPf pfId = do bId <- newSysLocalDs starToStar
+                       anonP1Id <- mkAnonPhantom1Id $ mkTyVarTy bId
+                       appDictVar <- newSysLocalDs $ mkTyConApp applicativeClassTyCon [mkTyVarTy bId]
+                       return $ mkCoreConApps wrapDataCon [mkLams [bId,appDictVar,anonP1Id] $ Var pfId]
+                   -- ^ TODO: type arguments
+  fixpfs <- foldrM (\(pfId, t) ts -> 
+                     do wt <- wrapPf pfId 
+                        return $ mkCoreConApps mkCProdDataCon
+                          [Type fType, Type t, undefined, wt,ts])
+              mkNilProdVal (zip recIds vTypes)
+                         -- TODO: type arguments!
+  let bindFixedImp = Let (NonRec fixedVar $ mkCoreApps nafix2Fun [tsListU, fixpfs]) 
+
+  -- and now get the fixed stuff out of fixedVar again...
+  
   pprPanic "appfix: dsExpr not implemented" $ ppr $ pfuncsBind $ bindFixedImp $ mkIntLit 3
 
 --dsAlet _ = panic "appfix: dsAlet: wrong type of bind..."
