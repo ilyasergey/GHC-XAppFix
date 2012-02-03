@@ -695,10 +695,10 @@ dsAlet lhsBinds = do
       tsType = foldr (\t ts -> mkTyConApp tconsTyCon [t,ts]) tnilTy vTypes
       fixedType = mkTyConApp tprodTyCon [fType, tsType]
   fixedVar <- newSysLocalDs fixedType
-  let mkTypeListTy = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal 
-  let starToStar = mkArrowKind liftedTypeKind liftedTypeKind
-      tnilVal = mkCoreConApps tnilDataCon []
+  let tnilVal = mkCoreConApps tnilDataCon []
       whooAtT t = mkCoreConApps whooDataCon [Type t]
+      mkTypeListTy = foldr (\t ts -> mkCoreConApps tconsDataCon [whooAtT t, ts]) tnilVal 
+  let starToStar = mkArrowKind liftedTypeKind liftedTypeKind
       tsListU = mkTypeListTy vTypes
       mkNilProdVal = mkCoreConApps mkNilProdDataCon []
       mkAnonPhantom1Id t = newSysLocalDs (mkTyConApp phantom1TyCon [t])
