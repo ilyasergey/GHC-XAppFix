@@ -48,6 +48,7 @@ import FastString
 import PrelNames
 
 import Control.Monad
+import Data.Map ( Map, lookup, fromList )
 
 #include "HsVersions.h"
 \end{code}
@@ -1465,29 +1466,28 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        ; thing <- tcExtendLetEnv closed ids' thing_inside
        ; return (binds', thing) }
 
-type AletNameTypeBinds = [(Name, TcType)]
+
+type AletIdentTypeMap id = Map id TcType
 
 -- switch types of bindings and emit new constraints
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
-                      -> TcType -> AletNameTypeBinds
+                      -> TcType -> AletIdentTypeMap Name
                       -> TcM [TcId]           
-tcSwitchAletBindTypes map ids p_var _name_tvars
+tcSwitchAletBindTypes map ids p_var name_tvars
   = mapM process ids
   where process id 
-          = do { tp_var <- newFlexiTyVarTy liftedTypeKind -- TODO: restore
-               ; let { tp = mkAppTy p_var tp_var 
-                     ; name = idName id }
-               ; case aletMapId map name of
-                 Just(new_name) -> 
-                  do { 
-                   ; new_id <- mkLocalBinder new_name tp
-                   ; return new_id }
+          = do { let name = idName id 
+               ; case (aletMapId map name, Data.Map.lookup name name_tvars) of
+                 (Just(new_name), Just(v_tp)) -> 
+                  do { let tp = mkAppTy p_var v_tp 
+                     ; new_id <- mkLocalBinder new_name tp
+                     ; return new_id }
                  _ -> panic "appfix: tcSwitchAletBindTypes" }                    
 
 -- Supply constraints and infer types
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
                 -> [LHsBind Name] -> TcType
-                -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletNameTypeBinds)
+                -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletIdentTypeMap Name)
 tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_type_var
   = setSrcSpan loc                              $ do
     -- I'm not sure if we need this
@@ -1510,7 +1510,7 @@ tcAletInfer
   -> TcSigFun -> PragFun
   -> [LHsBind Name]
   -> TcType
-  -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletNameTypeBinds)
+  -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletIdentTypeMap Name)
 tcAletInfer mono closed tc_sig_fn prag_fn bind_list p_type_var
   = do { ((binds', mono_infos, name_tvars), wanted) 
              <- captureConstraints $
@@ -1540,7 +1540,7 @@ tcAletInfer mono closed tc_sig_fn prag_fn bind_list p_type_var
 tcAletMonoBinds :: TcSigFun -> LetBndrSpec 
                 -> [LHsBind Name]           
                 -> TcType
-                -> TcM (LHsBinds TcId, [MonoBindInfo], AletNameTypeBinds)
+                -> TcM (LHsBinds TcId, [MonoBindInfo], AletIdentTypeMap Name)
 tcAletMonoBinds sig_fn no_gen binds p_type_var
   = do  { tbv <- mapM (wrapLocM $ tcAletLhs sig_fn no_gen p_type_var) binds
 
@@ -1555,7 +1555,7 @@ tcAletMonoBinds sig_fn no_gen binds p_type_var
                     traceTc "tcMonoBinds" $  vcat [ ppr n <+> ppr id <+> ppr (idType id) 
                                                   | (n,id) <- rhs_id_env]
                     mapM (wrapLocM tcRhs) tc_binds
-        ; return (listToBag binds', mono_info, n_types) }
+        ; return (listToBag binds', mono_info, Data.Map.fromList n_types) }
   where push_loc :: Located (a, b) -> (Located a, b)
         push_loc (L loc (x, y)) = (L loc x, y) 
 
@@ -1565,16 +1565,21 @@ tcAletLhs :: TcSigFun -> LetBndrSpec
           -> TcType
           -> HsBind Name 
           -> TcM (TcMonoBind, (Name, TcType))
-tcAletLhs _sig_fn no_gen _p_type_var (FunBind { fun_id = L nm_loc name, fun_infix = inf, fun_matches = matches })
+tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf, fun_matches = matches })
   -- | Just sig <- sig_fn name
   -- = do  { mono_id <- newSigLetBndr no_gen name sig
   --       ; return (TcFunBind (name, Just sig, mono_id) nm_loc inf matches) }
   -- | otherwise
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
-        ; mono_id <- newNoSigLetBndr no_gen name mono_ty
-        ; let _mono_bind = (TcFunBind (name, Nothing, mono_id) nm_loc inf matches)
-        ; let composed_type = undefined -- TODO define
-        ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches, (name, composed_type)) }
+        ; b_var <- newFlexiTyVar $ mkArrowKind liftedTypeKind liftedTypeKind
+        ; let b_tp = mkTyVarTy b_var
+        ; comp_fn <- tcLookupTyCon composeTyConName
+        ; let compose_tp = mkTyConApp comp_fn [p_tp, b_tp, mono_ty]
+        -- \forall b . Compose p b v
+        ; let _quant_ty = mkForAllTy b_var compose_tp
+        ; mono_id <- newNoSigLetBndr no_gen name compose_tp
+
+        ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches, (name, mono_ty)) }
 
 -- AbsBind, VarBind, PatBind impossible
 tcAletLhs _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
