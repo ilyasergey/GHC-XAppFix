@@ -1417,12 +1417,14 @@ tcRnExpr hsc_env ictxt rdr_expr
     uniq <- newUnique ;
     let { fresh_it  = itName uniq (getLoc rdr_expr) } ;
     ((_tc_expr, res_ty), lie)	<- captureConstraints (tcInferRho rn_expr) ;
+    glb_tvs <- tcGetGlobalTyVars ;
     ((qtvs, dicts, _, _), lie_top) <- captureConstraints $ 
                                       {-# SCC "simplifyInfer" #-}
                                       simplifyInfer True {- Free vars are closed -}
                                                     False {- No MR for now -}
                                                     [(fresh_it, res_ty)]
-                                                    lie  ;
+                                                    lie
+                                                    glb_tvs;
     _ <- simplifyInteractive lie_top ;       -- Ignore the dicionary bindings
 
     let { all_expr_ty = mkForAllTys qtvs (mkPiTypes dicts res_ty) } ;

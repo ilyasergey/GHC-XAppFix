@@ -227,26 +227,29 @@ simplifyInfer :: Bool
               -> [(Name, TcTauType)]   -- Variables to be generalised,
                                        -- and their tau-types
               -> WantedConstraints
+              -> TcTyVarSet            -- variables to not quantify
               -> TcM ([TcTyVar],    -- Quantify over these type variables
                       [EvVar],      -- ... and these constraints
 		      Bool,	    -- The monomorphism restriction did something
 		      		    --   so the results type is not as general as
 				    --   it could be
                       TcEvBinds)    -- ... binding these evidence variables
-simplifyInfer _top_lvl apply_mr name_taus wanteds
+simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
   | isEmptyWC wanteds
-  = do { gbl_tvs     <- tcGetGlobalTyVars            -- Already zonked
-       ; zonked_taus <- zonkTcTypes (map snd name_taus)
+  = do { zonked_taus <- zonkTcTypes (map snd name_taus)
+       -- ; gbl_tvs     <- tcGetGlobalTyVars            -- Already zonked
        ; let tvs_to_quantify = tyVarsOfTypes zonked_taus `minusVarSet` gbl_tvs
        	     		       -- tvs_to_quantify can contain both kind and type vars
-       	                       -- See Note [Which variables to quantify]
+       	                       -- See Note [Which variables to
+                               -- quantify]
+
        ; qtvs <- zonkQuantifiedTyVars tvs_to_quantify
        ; return (qtvs, [], False, emptyTcEvBinds) }
 
   | otherwise
   = do { zonked_wanteds <- zonkWC wanteds
        ; zonked_taus    <- zonkTcTypes (map snd name_taus)
-       ; gbl_tvs        <- tcGetGlobalTyVars
+       --; gbl_tvs        <- tcGetGlobalTyVars
 
        ; traceTc "simplifyInfer {"  $ vcat
              [ ptext (sLit "names =") <+> ppr (map fst name_taus)

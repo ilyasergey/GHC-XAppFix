@@ -436,7 +436,8 @@ tcPolyInfer mono closed tc_sig_fn prag_fn rec_tc bind_list
                 tcMonoBinds tc_sig_fn LetLclBndr rec_tc bind_list
 
        ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; (qtvs, givens, mr_bites, ev_binds) <- simplifyInfer closed mono name_taus wanted
+       ; glb_tvs <- tcGetGlobalTyVars
+       ; (qtvs, givens, mr_bites, ev_binds) <- simplifyInfer closed mono name_taus wanted glb_tvs
 
        ; theta <- zonkTcThetaType (map evVarPred givens)
        ; exports <- checkNoErrs $ mapM (mkExport prag_fn qtvs theta) mono_infos
@@ -1456,10 +1457,12 @@ tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
 
 tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside 
   = do { let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
-       ; (p_type_var, _appfix_ct) <- mk_var_constr arrow_kind appfixClassName
+       ; p_var <- newFlexiTyVar arrow_kind
+       ; let p_type_var = mkTyVarTy p_var
+--       ; (p_type_var, _appfix_ct) <- mk_var_constr arrow_kind appfixClassName
 --       ; emitConstraints $ mkFlatWC [appfix_ct]
-
-       ; (binds', ids, closed, name_tvars) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds p_type_var
+--       ; _p_ev <- emit_var_constr p_type_var appfixClassName
+       ; (binds', ids, closed, name_tvars) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds (p_var, p_type_var)
        ; ids' <- tcSwitchAletBindTypes map ids p_type_var name_tvars
 
        -- proceed with the body of the alet-expression
@@ -1486,9 +1489,9 @@ tcSwitchAletBindTypes map ids p_var name_tvars
 
 -- Supply constraints and infer types
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
-                -> [LHsBind Name] -> TcType
+                -> [LHsBind Name] -> (TcTyVar, TcType)
                 -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletIdentTypeMap Name)
-tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_type_var
+tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list ppair
   = setSrcSpan loc                              $ do
     -- I'm not sure if we need this
     -- recoverM (recoveryCode binder_names sig_fn) $ do 
@@ -1496,7 +1499,7 @@ tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_type_var
     ; traceTc "Bindings for" (ppr binder_names)
 
     ; tc_sig_fn <- tcInstSigs sig_fn binder_names
-    ; result <- tcAletInfer True True tc_sig_fn prag_fn bind_list p_type_var             
+    ; result <- tcAletInfer True True tc_sig_fn prag_fn bind_list ppair             
 
     ; return result }
   where
@@ -1509,23 +1512,25 @@ tcAletInfer
   -> Bool         -- True <=> free vars have closed types
   -> TcSigFun -> PragFun
   -> [LHsBind Name]
-  -> TcType
+  -> (TcTyVar, TcType)
   -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, AletIdentTypeMap Name)
-tcAletInfer mono closed tc_sig_fn prag_fn bind_list p_type_var
+tcAletInfer mono _closed tc_sig_fn prag_fn bind_list (p_var, p_type_var)
   = do { ((binds', mono_infos, name_tvars), wanted) 
              <- captureConstraints $
                 tcAletMonoBinds tc_sig_fn LetLclBndr bind_list p_type_var
 
        ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; (qtvs, givens, mr_bites, ev_binds) <- simplifyInfer closed mono name_taus wanted
+       ; glb_tvs <- tcGetGlobalTyVars
+       ; let no_qtv = glb_tvs `unionVarSet` (unitVarSet p_var)
+       
+       ; (qtvs, givens, _, ev_binds) <- simplifyInfer False mono name_taus wanted no_qtv
 
        ; theta <- zonkTcThetaType (map evVarPred givens)
        ; exports <- checkNoErrs $ mapM (mkExport prag_fn qtvs theta) mono_infos
 
        ; loc <- getSrcSpanM
        ; let poly_ids = map abe_poly exports
-             final_closed | closed && not mr_bites = TopLevel
-                          | otherwise              = NotTopLevel
+             final_closed = NotTopLevel
              abs_bind = L loc $ 
                         AbsBinds { abs_tvs = qtvs
                                  , abs_ev_vars = givens, abs_ev_binds = ev_binds
@@ -1548,11 +1553,9 @@ tcAletMonoBinds sig_fn no_gen binds p_type_var
         -- Bring the monomorphic Ids, into scope for the RHSs
         ; let mono_info  = getMonoBindInfo tc_binds
               rhs_id_env = [(name,mono_id) | (name, Nothing, mono_id) <- mono_info]
-                    -- A monomorphic binding for each term variable that lacks 
-                    -- a type sig.  (Ones with a sig are already in scope.)
 
         ; binds' <- tcExtendIdEnv2 rhs_id_env $ do
-                    traceTc "tcMonoBinds" $  vcat [ ppr n <+> ppr id <+> ppr (idType id) 
+                    traceTc "tcAletMonoBinds" $  vcat [ ppr n <+> ppr id <+> ppr (idType id) 
                                                   | (n,id) <- rhs_id_env]
                     mapM (wrapLocM tcRhs) tc_binds
         ; return (listToBag binds', mono_info, Data.Map.fromList n_types) }
@@ -1573,10 +1576,11 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
         ; b_var <- newFlexiTyVar $ mkArrowKind liftedTypeKind liftedTypeKind
         ; let b_tp = mkTyVarTy b_var
+--        ; _ <- emit_var_constr b_tp applicativeClassName
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; let compose_tp = mkTyConApp comp_fn [p_tp, b_tp, mono_ty]
         -- \forall b . Compose p b v
-        ; let _quant_ty = mkForAllTy b_var compose_tp
+        --; let quant_ty = mkForAllTy b_var compose_tp
         ; mono_id <- newNoSigLetBndr no_gen name compose_tp
 
         ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches, (name, mono_ty)) }
@@ -1606,20 +1610,18 @@ tcAletLhs _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
 --        ; return (res, new_wc) }
 
 -- create a new constrained type variable 
-mk_var_constr :: Kind -> Name -> TcM (TcType, Ct)
-mk_var_constr kind cls_name
-  = do { p_type_var <- newFlexiTyVarTy kind                   
-       ; constr_cls <- tcLookupClass cls_name
-       -- generate evidence variable for the forthcoming constraint
-       ; ev_var <- newEvVar $ mkClassPred constr_cls [p_type_var]
-       ; ct_loc <- getCtLoc AletOrigin
-       ; let class_ct = CDictCan { cc_id     = ev_var, 
-                                   cc_flavor = Wanted ct_loc, 
-                                   cc_tyargs = [p_type_var], 
-                                   cc_class  = constr_cls,
-                                   cc_depth  = 2 }
-
-       ; return (p_type_var, class_ct) }
+-- emit_var_constr :: TcType -> Name -> TcM EvVar
+-- emit_var_constr t_var cls_name
+--   = do { constr_cls <- tcLookupClass cls_name
+--        ; ev <- newEvVar $ mkClassPred constr_cls [t_var]
+--        ; loc <- getCtLoc AletOrigin
+--        ; let class_ct = CDictCan { cc_id     = ev, 
+--                                    cc_flavor = Wanted loc, 
+--                                    cc_tyargs = [t_var], 
+--                                    cc_class  = constr_cls,
+--                                    cc_depth  = 2 }
+--        ; emitWantedCts $ singleCt class_ct
+--        ; return ev }
 
 -- -- make constraints of the form Compose p b v_i
 -- -- emit a constraint for b
