@@ -1459,7 +1459,9 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
   = do { let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
        ; p_var <- newFlexiTyVar arrow_kind
        ; let p_type_var = mkTyVarTy p_var
---       ; _p_ev <- emit_var_constr p_type_var appfixClassName
+
+       ; _p_ev <- emit_var_constr p_type_var appfixClassName
+
        ; (binds', ids, closed) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds (p_var, p_type_var)
        ; ids' <- tcSwitchAletBindTypes map ids p_type_var
 
@@ -1631,35 +1633,19 @@ tcAletLhs _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
 --------------------------------------------------------------------------------------
 
 -- create a new constrained type variable 
--- emit_var_constr :: TcType -> Name -> TcM EvVar
--- emit_var_constr t_var cls_name
---   = do { constr_cls <- tcLookupClass cls_name
---        ; ev <- newEvVar $ mkClassPred constr_cls [t_var]
---        ; loc <- getCtLoc AletOrigin
---        ; let class_ct = CDictCan { cc_id     = ev, 
---                                    cc_flavor = Wanted loc, 
---                                    cc_tyargs = [t_var], 
---                                    cc_class  = constr_cls,
---                                    cc_depth  = 2 }
---        ; emitWantedCts $ singleCt class_ct
---        ; return ev }
+emit_var_constr :: TcType -> Name -> TcM EvVar
+emit_var_constr t_var cls_name
+  = do { constr_cls <- tcLookupClass cls_name
+       ; ev <- newEvVar $ mkClassPred constr_cls [t_var]
+       ; loc <- getCtLoc AletOrigin
+       ; let class_ct = CDictCan { cc_id     = ev, 
+                                   cc_flavor = Wanted loc, 
+                                   cc_tyargs = [t_var], 
+                                   cc_class  = constr_cls,
+                                   cc_depth  = 2 }
+       ; emitWantedCts $ singleCt class_ct
+       ; return ev }
 
-
--- -- Add 'alet'-specific constraints into the type environemnts
--- -- before running an internal TC monad
--- alet_constraints :: TcType 
---                  -> TcM (LHsBinds TcId, [MonoBindInfo])
---                  -> TcM ((LHsBinds TcId, [MonoBindInfo]), WantedConstraints)
--- alet_constraints p_type_var thing_inside
---   = do { (res@(_binds', mono_infos), original_wc) <- captureConstraints thing_inside
---        -- use mono_infos to generate constraints for particulat bindings
---        ; let tps = [idType mono_id | (_, _, mono_id) <- mono_infos]
-       
---        -- create new constraints
---        ; compose_constrs <- mk_compose_contrs p_type_var tps
---        ; let new_wc = compose_constrs `andWC` original_wc 
-
---        ; return (res, new_wc) }
 
 -- -- make constraints of the form Compose p b v_i
 -- -- emit a constraint for b
@@ -1678,7 +1664,7 @@ tcAletLhs _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
 --         ; ct_loc <- getCtLoc AletOrigin
 --         ; let fun_ct = CFunEqCan { cc_id     = ev_var, 
 --                                    cc_flavor = Wanted ct_loc, 
---                                    cc_fun    = comp_fn,             
+                                      --                                    cc_fun    = comp_fn,             
 --                                    cc_tyargs = t_args, 
 --                                    cc_rhs    = btp,
 --                                    cc_depth  = 2 }
