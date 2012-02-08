@@ -240,8 +240,11 @@ simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
        -- ; gbl_tvs     <- tcGetGlobalTyVars            -- Already zonked
        ; let tvs_to_quantify = tyVarsOfTypes zonked_taus `minusVarSet` gbl_tvs
        	     		       -- tvs_to_quantify can contain both kind and type vars
-       	                       -- See Note [Which variables to
-                               -- quantify]
+       	                       -- See Note [Which variables to quantify]
+       ; traceTc "simplifyInfer {"  $ vcat
+             [ ptext (sLit "gbl_tvs =") <+> ppr gbl_tvs
+             , ptext (sLit "tvs_to_quantify =") <+> ppr tvs_to_quantify
+             ]
 
        ; qtvs <- zonkQuantifiedTyVars tvs_to_quantify
        ; return (qtvs, [], False, emptyTcEvBinds) }

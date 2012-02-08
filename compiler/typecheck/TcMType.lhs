@@ -59,7 +59,7 @@ module TcMType (
 
   --------------------------------
   -- Zonking
-  zonkType, zonkKind, zonkTcPredType, 
+  zonkType, zonkKind, zonkTcPredType, zonkTyVarKind,
   zonkTcTypeCarefully, skolemiseUnboundMetaTyVar,
   zonkTcTyVar, zonkTcTyVars, zonkTcTyVarsAndFV, zonkSigTyVar,
   zonkQuantifiedTyVar, zonkQuantifiedTyVars,
