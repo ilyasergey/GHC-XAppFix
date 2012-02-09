@@ -1618,7 +1618,9 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
   -- | otherwise
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
         ; b_tp <- newFlexiTyVarTy $ mkArrowKind liftedTypeKind liftedTypeKind 
---        ; _ <- emit_var_constr b_tp applicativeClassName
+
+        -- ; _ <- emit_var_constr b_tp applicativeClassName
+
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; let compose_tp = mkTyConApp comp_fn [p_tp, b_tp, mono_ty]
         ; mono_id <- newNoSigLetBndr no_gen name compose_tp
@@ -1627,10 +1629,6 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
 
 -- AbsBind, VarBind, PatBind impossible
 tcAletLhs _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
-
-
-
---------------------------------------------------------------------------------------
 
 -- create a new constrained type variable 
 emit_var_constr :: TcType -> Name -> TcM EvVar
@@ -1645,29 +1643,5 @@ emit_var_constr t_var cls_name
                                    cc_depth  = 2 }
        ; emitWantedCts $ singleCt class_ct
        ; return ev }
-
-
--- -- make constraints of the form Compose p b v_i
--- -- emit a constraint for b
--- mk_compose_contrs :: TcType -> [TcType]
---                   -> TcM (WantedConstraints) 
--- mk_compose_contrs afix_var bind_types
---   = do { cts <- mapM compose_constr bind_types
---        ; return $ mkFlatWC $ concat cts }
---   where compose_constr btp = do {
---         ; comp_fn <- tcLookupTyCon composeTyConName
---         ; vi_var <- newFlexiTyVarTy liftedTypeKind
---         ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
---         ; (app_var, _app_ct) <- mk_var_constr arrow_kind applicativeClassName
---         ; let t_args = [afix_var, app_var, vi_var]                   
---         ; ev_var <- newEvVar $ mkEqPred (mkTyConApp comp_fn t_args, btp)
---         ; ct_loc <- getCtLoc AletOrigin
---         ; let fun_ct = CFunEqCan { cc_id     = ev_var, 
---                                    cc_flavor = Wanted ct_loc, 
-                                      --                                    cc_fun    = comp_fn,             
---                                    cc_tyargs = t_args, 
---                                    cc_rhs    = btp,
---                                    cc_depth  = 2 }
---         ; return [{- app_ct,-} fun_ct]}
-         
+        
 \end{code} 
