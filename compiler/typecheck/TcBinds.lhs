@@ -1585,7 +1585,6 @@ tcAletInfer mono _closed tc_sig_fn prag_fn bind_list (p_var, p_type_var)
        ; traceTc "alet binding:" (ppr final_closed $$
                              ppr (poly_ids `zip` map idType poly_ids))
        ; return (unitBag abs_bind, poly_ids, final_closed)   
-         -- poly_ids are guaranteed zonked by mkExport
   } 
   
 
