@@ -1505,7 +1505,9 @@ is type-checked with respect to the provided signature.
 peelAndReZonk :: TcType -> TcM TcType
 peelAndReZonk t
   | Just (_tv, body) <- splitForAllTy_maybe t
-  = peelAndReZonk body 
+  = peelAndReZonk body
+  | Just (_fun, arg) <- splitFunTy_maybe t
+  = peelAndReZonk arg
   | Just (_tycon, args) <- splitTyConApp_maybe t
   -- , comp_fn <- tcLookupTyCon composeTyConName
   -- , tycon == comp_fn
@@ -1614,9 +1616,14 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
         -- ; _ <- emit_var_constr b_tp applicativeClassName
 
         ; comp_fn <- tcLookupTyCon composeTyConName
-        ; let compose_tp = mkTyConApp comp_fn [p_tp, mkTyVarTy b_var, mono_ty]
-        ; let quant = mkForAllTy b_var compose_tp
-        ; mono_id <- newNoSigLetBndr no_gen name quant
+        ; cls <- tcLookupClass applicativeClassName
+        ; let b_tp = mkTyVarTy b_var
+        ; let compose_tp = mkTyConApp comp_fn [p_tp, b_tp, mono_ty]
+        ; let pred = mkClassPred cls [b_tp]
+        ; let sigma = mkSigmaTy [b_var] [pred] compose_tp
+        
+        -- ; let quant = mkForAllTy b_var compose_tp
+        ; mono_id <- newNoSigLetBndr no_gen name sigma
 
         ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches) }
 
