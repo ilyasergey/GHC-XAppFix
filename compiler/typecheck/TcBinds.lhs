@@ -436,8 +436,7 @@ tcPolyInfer mono closed tc_sig_fn prag_fn rec_tc bind_list
                 tcMonoBinds tc_sig_fn LetLclBndr rec_tc bind_list
 
        ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; glb_tvs <- tcGetGlobalTyVars
-       ; (qtvs, givens, mr_bites, ev_binds) <- simplifyInfer closed mono name_taus wanted glb_tvs
+       ; (qtvs, givens, mr_bites, ev_binds) <- simplifyInfer closed mono name_taus wanted
 
        ; theta <- zonkTcThetaType (map evVarPred givens)
        ; exports <- checkNoErrs $ mapM (mkExport prag_fn qtvs theta) mono_infos
@@ -1462,7 +1461,7 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
 
        ; _p_ev <- emit_var_constr p_type_var appfixClassName
 
-       ; (binds', ids, closed) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds (p_var, p_type_var)
+       ; (binds', ids, closed) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds p_var
        ; ids' <- tcSwitchAletBindTypes map ids p_type_var
 
        -- proceed with the body of the alet-expression
@@ -1479,10 +1478,10 @@ tcSwitchAletBindTypes map ids p_var
           = do { let name = idName id 
                ; case aletMapId map name of
                  Just(new_name) -> 
-                  do {
-                       traceTc "switch-real-type" (ppr $ idType id)
-                     ; inner_tp <- peelAndReZonk $ idType id
-                     ; traceTc "peeled body" (ppr $ inner_tp)
+                  do { traceTc "switch-real-type:" (ppr $ idType id)
+                     ; comp_fn <- tcLookupTyCon composeTyConName
+                     ; inner_tp <- peelAndReZonk (idType id) comp_fn
+                     ; traceTc "peeled type body:" (ppr $ inner_tp)
 
                      ; new_id <- mkLocalBinder new_name $ mkAppTy p_var inner_tp
                      ; return new_id }
@@ -1494,29 +1493,29 @@ Note [Re-zonking obtained type]
 In order to provide correct type-checking for alet-bindings, 
 for each binding 
 
-f_i :: \forall tvs, b . Compose p b t_i
+v_i :: \forall tvs, b . (Applicative b) => Compose p b t_i
 
 we extract the type t_i from the type above and re-instantiate 
-all skolem variables in it by newly instanticated type variable 
-types so they could be re-unified when the body of alet-bindings
-is type-checked with respect to the provided signature. 
+all skolem variables, corresponding to tvs in it by newly 
+instanticated type variable types so they could be re-unified 
+when the body of alet-bindings is type-checked with respect 
+to the provided signature.
 
 \begin{code}
-peelAndReZonk :: TcType -> TcM TcType
-peelAndReZonk t
+peelAndReZonk :: TcType -> TyCon -> TcM TcType
+peelAndReZonk t comp_fn
   | Just (_tv, body) <- splitForAllTy_maybe t
-  = peelAndReZonk body
+  = peelAndReZonk body comp_fn
   | Just (_fun, arg) <- splitFunTy_maybe t
-  = peelAndReZonk arg
-  | Just (_tycon, args) <- splitTyConApp_maybe t
-  -- , comp_fn <- tcLookupTyCon composeTyConName
-  -- , tycon == comp_fn
+  = peelAndReZonk arg comp_fn
+  | Just (tycon, args) <- splitTyConApp_maybe t
+  , tycon == comp_fn
   , length args == 3
   = do { let tp = args !! 2
        ; zonked <- zonkType zonkWithNewTVars tp
        ; return zonked}
   | otherwise
-  = panic "peel: not an expected compose type"
+  = panic "peelAndReZonk: not an expected compose type"
   where zonkWithNewTVars tv =
          if isTcTyVar tv
          then case tcTyVarDetails tv of
@@ -1528,9 +1527,9 @@ peelAndReZonk t
 
 -- Supply constraints and infer types
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
-                -> [LHsBind Name] -> (TcTyVar, TcType)
+                -> [LHsBind Name] -> TcTyVar
                 -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
-tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list ppair
+tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_var
   = setSrcSpan loc                              $ do
     -- I'm not sure if we need this
     -- recoverM (recoveryCode binder_names sig_fn) $ do 
@@ -1538,7 +1537,7 @@ tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list ppair
     ; traceTc "Bindings for" (ppr binder_names)
 
     ; tc_sig_fn <- tcInstSigs sig_fn binder_names
-    ; result <- tcAletInfer True True tc_sig_fn prag_fn bind_list ppair             
+    ; result <- tcAletInfer True True tc_sig_fn prag_fn bind_list p_var             
 
     ; return result }
   where
@@ -1551,19 +1550,16 @@ tcAletInfer
   -> Bool         -- True <=> free vars have closed types
   -> TcSigFun -> PragFun
   -> [LHsBind Name]
-  -> (TcTyVar, TcType)
+  -> TcTyVar
   -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
-tcAletInfer mono _closed tc_sig_fn prag_fn bind_list (p_var, p_type_var)
+tcAletInfer mono _closed tc_sig_fn prag_fn bind_list p_var
   = do { ((binds', mono_infos), wanted) 
              <- captureConstraints $
-                tcAletMonoBinds tc_sig_fn LetLclBndr bind_list p_type_var
+                tcAletMonoBinds tc_sig_fn LetLclBndr bind_list p_var
 
        ; let name_taus = [(name, idType mono_id) | (name, _, mono_id) <- mono_infos]
-       ; glb_tvs <- tcGetGlobalTyVars
 
-       ; let no_qtv = glb_tvs `unionVarSet` (unitVarSet p_var)       
-       ; (qtvs, givens, _, ev_binds) <- simplifyInfer False mono name_taus wanted no_qtv
-
+       ; (qtvs, givens, _, ev_binds) <- simplifyInfer False mono name_taus wanted
        ; theta <- zonkTcThetaType (map evVarPred givens)
        ; exports <- checkNoErrs $ mapM (mkExport prag_fn qtvs theta) mono_infos
 
@@ -1583,16 +1579,18 @@ tcAletInfer mono _closed tc_sig_fn prag_fn bind_list (p_var, p_type_var)
 
 tcAletMonoBinds :: TcSigFun -> LetBndrSpec 
                 -> [LHsBind Name]           
-                -> TcType
+                -> TcTyVar
                 -> TcM (LHsBinds TcId, [MonoBindInfo])
-tcAletMonoBinds sig_fn no_gen binds p_type_var
-  = do  { tc_binds <- mapM (wrapLocM $ tcAletLhs sig_fn no_gen p_type_var) binds
+tcAletMonoBinds sig_fn no_gen binds p_var
+  = do  { tc_binds <- mapM (wrapLocM $ tcAletLhs sig_fn no_gen (mkTyVarTy p_var)) binds
 
         -- Bring the monomorphic Ids, into scope for the RHSs
         ; let mono_info  = getMonoBindInfo tc_binds
               rhs_id_env = [(name,mono_id) | (name, Nothing, mono_id) <- mono_info]
+              p_name = Var.varName p_var
+              a_thing = AThing $ mkArrowKind liftedTypeKind liftedTypeKind
 
-        ; binds' <- tcExtendIdEnv2 rhs_id_env $ do
+        ; binds' <- tcExtendIdEnv2 rhs_id_env $ tcExtendTcTyThingEnv [(p_name, a_thing)] $ do
                     traceTc "tcAletMonoBinds" $  vcat [ ppr n <+> ppr id <+> ppr (idType id) 
                                                   | (n,id) <- rhs_id_env]
                     mapM (wrapLocM tcRhs) tc_binds
@@ -1611,9 +1609,7 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
         ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
         ; b_name <- newName (mkVarOccFS (fsLit "b"))
-        ; let b_var = mkTyVar b_name arrow_kind --superSkolemTv
-
-        -- ; _ <- emit_var_constr b_tp applicativeClassName
+        ; let b_var = mkTyVar b_name arrow_kind
 
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; cls <- tcLookupClass applicativeClassName
@@ -1622,7 +1618,6 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
         ; let pred = mkClassPred cls [b_tp]
         ; let sigma = mkSigmaTy [b_var] [pred] compose_tp
         
-        -- ; let quant = mkForAllTy b_var compose_tp
         ; mono_id <- newNoSigLetBndr no_gen name sigma
 
         ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches) }

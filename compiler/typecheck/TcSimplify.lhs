@@ -227,20 +227,20 @@ simplifyInfer :: Bool
               -> [(Name, TcTauType)]   -- Variables to be generalised,
                                        -- and their tau-types
               -> WantedConstraints
-              -> TcTyVarSet            -- variables to not quantify
               -> TcM ([TcTyVar],    -- Quantify over these type variables
                       [EvVar],      -- ... and these constraints
 		      Bool,	    -- The monomorphism restriction did something
 		      		    --   so the results type is not as general as
 				    --   it could be
                       TcEvBinds)    -- ... binding these evidence variables
-simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
+simplifyInfer _top_lvl apply_mr name_taus wanteds
   | isEmptyWC wanteds
   = do { zonked_taus <- zonkTcTypes (map snd name_taus)
-       -- ; gbl_tvs     <- tcGetGlobalTyVars            -- Already zonked
+       ; gbl_tvs     <- tcGetGlobalTyVars            -- Already zonked
        ; let tvs_to_quantify = tyVarsOfTypes zonked_taus `minusVarSet` gbl_tvs
        	     		       -- tvs_to_quantify can contain both kind and type vars
        	                       -- See Note [Which variables to quantify]
+
        ; traceTc "simplifyInfer {"  $ vcat
              [ ptext (sLit "gbl_tvs =") <+> ppr gbl_tvs
              , ptext (sLit "tvs_to_quantify =") <+> ppr tvs_to_quantify
@@ -252,7 +252,7 @@ simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
   | otherwise
   = do { zonked_wanteds <- zonkWC wanteds
        ; zonked_taus    <- zonkTcTypes (map snd name_taus)
-       --; gbl_tvs        <- tcGetGlobalTyVars
+       ; gbl_tvs        <- tcGetGlobalTyVars
 
        ; traceTc "simplifyInfer {"  $ vcat
              [ ptext (sLit "names =") <+> ppr (map fst name_taus)
@@ -298,12 +298,11 @@ simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
             -- Step 3 
             -- Split again simplified_perhaps_bound, because some unifications 
             -- may have happened, and emit the free constraints. 
-       ; pure_gbl       <- tcGetGlobalTyVars
-       ; let gbl_tvs'   =  pure_gbl `unionVarSet` gbl_tvs
+       ; gbl_tvs        <- tcGetGlobalTyVars
        ; zonked_tau_tvs <- zonkTcTyVarsAndFV zonked_tau_tvs
        ; zonked_simples <- zonkCts (wc_flat simpl_results)
-       ; let init_tvs 	     = zonked_tau_tvs `minusVarSet` gbl_tvs'
-             poly_qtvs       = growWantedEVs gbl_tvs' zonked_simples init_tvs
+       ; let init_tvs 	     = zonked_tau_tvs `minusVarSet` gbl_tvs
+             poly_qtvs       = growWantedEVs gbl_tvs zonked_simples init_tvs
 	     (pbound, pfree) = partitionBag (quantifyMe poly_qtvs) zonked_simples
 
 	     -- Monomorphism restriction
