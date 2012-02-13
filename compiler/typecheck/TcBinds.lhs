@@ -1516,21 +1516,12 @@ peelAndReZonk t
   | otherwise
   = panic "peel: not an expected compose type"
   where zonkWithNewTVars tv =
-          case tcTyVarDetails tv of
-           SkolemTv {}    -> do { traceTc "appfix: skolem" (ppr tv)
-                                ; newFlexiTyVarTy $ tyVarKind tv }
-           _              -> return $ mkTyVarTy tv                     
-        --    RuntimeUnk {}  -> do { traceTc "appfix: runtime-unk" (ppr tv)
-        --                         ; zonk_kind_and_return tv } 
-        --    FlatSkol ty    -> do { traceTc "appfix: flat skolem" (ppr tv)
-        --                         ; peelAnReZonk ty }
-        --    MetaTv _ ref   -> do { cts <- readMutVar ref
-        --                         ; case cts of
-        --                            Flexi -> do { traceTc "appfix: meta-tv flexi" (ppr tv)
-        --                                              ; zonk_kind_and_return tv }
-        --                            Indirect ty -> do { traceTc "appfix: meta-tv indirect" (ppr tv)
-        --                                              ; peelAndReZonk ty }}
-        -- zonk_kind_and_return tv = do { return (mkTyVarTy tv) }
+         if isTcTyVar tv
+         then case tcTyVarDetails tv of
+                SkolemTv {}    -> do { traceTc "appfix: skolem" (ppr tv)
+                                     ; newFlexiTyVarTy $ tyVarKind tv }
+                _              -> return $ mkTyVarTy tv
+         else return $ mkTyVarTy tv                     
 
 
 -- Supply constraints and infer types
@@ -1616,13 +1607,16 @@ tcAletLhs _sig_fn no_gen p_tp (FunBind { fun_id = L nm_loc name, fun_infix = inf
   --       ; return (TcFunBind (name, Just sig, mono_id) nm_loc inf matches) }
   -- | otherwise
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
-        ; b_tp <- newFlexiTyVarTy $ mkArrowKind liftedTypeKind liftedTypeKind 
+        ; let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
+        ; b_name <- newName (mkVarOccFS (fsLit "b"))
+        ; let b_var = mkTyVar b_name arrow_kind --superSkolemTv
 
         -- ; _ <- emit_var_constr b_tp applicativeClassName
 
         ; comp_fn <- tcLookupTyCon composeTyConName
-        ; let compose_tp = mkTyConApp comp_fn [p_tp, b_tp, mono_ty]
-        ; mono_id <- newNoSigLetBndr no_gen name compose_tp
+        ; let compose_tp = mkTyConApp comp_fn [p_tp, mkTyVarTy b_var, mono_ty]
+        ; let quant = mkForAllTy b_var compose_tp
+        ; mono_id <- newNoSigLetBndr no_gen name quant
 
         ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches) }
 

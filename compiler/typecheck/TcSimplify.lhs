@@ -298,11 +298,12 @@ simplifyInfer _top_lvl apply_mr name_taus wanteds gbl_tvs
             -- Step 3 
             -- Split again simplified_perhaps_bound, because some unifications 
             -- may have happened, and emit the free constraints. 
-       ; gbl_tvs        <- tcGetGlobalTyVars
+       ; pure_gbl       <- tcGetGlobalTyVars
+       ; let gbl_tvs'   =  pure_gbl `unionVarSet` gbl_tvs
        ; zonked_tau_tvs <- zonkTcTyVarsAndFV zonked_tau_tvs
        ; zonked_simples <- zonkCts (wc_flat simpl_results)
-       ; let init_tvs 	     = zonked_tau_tvs `minusVarSet` gbl_tvs
-             poly_qtvs       = growWantedEVs gbl_tvs zonked_simples init_tvs
+       ; let init_tvs 	     = zonked_tau_tvs `minusVarSet` gbl_tvs'
+             poly_qtvs       = growWantedEVs gbl_tvs' zonked_simples init_tvs
 	     (pbound, pfree) = partitionBag (quantifyMe poly_qtvs) zonked_simples
 
 	     -- Monomorphism restriction
