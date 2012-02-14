@@ -390,7 +390,7 @@ tcExpr (HsLet binds expr) res_ty
 tcExpr (HsAlet binds expr _ aletIdsMap _aletTooling) res_ty 
   = do  { (binds', ev_var, expr') <- tcAletBinds binds aletIdsMap $
 			             tcMonoExpr expr res_ty   
-	; return (HsAlet binds' expr' ev_var aletMapEmpty 
+	; return (HsAlet binds' expr' ev_var aletIdsMap 
                          (panic "appfix: aletTooling not yet used, no rebindable syntax yet")) }
 
 tcExpr (HsCase scrut matches) exp_ty
