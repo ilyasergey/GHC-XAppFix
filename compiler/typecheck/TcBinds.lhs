@@ -1410,12 +1410,12 @@ patMonoBindsCtxt pat grhss
 tcAletBinds :: HsLocalBinds Name 
             -> AletIdentMap Name
             -> TcM thing            
-            -> TcM (HsLocalBinds TcId, thing)
+            -> TcM (HsLocalBinds TcId, EvVar, thing)
 
 tcAletBinds (HsValBinds (ValBindsOut binds sigs)) map thing_inside
-  = do  { (binds', thing) <- tcAletValBinds NotTopLevel binds sigs map thing_inside
+  = do  { (binds', ev_var, thing) <- tcAletValBinds NotTopLevel binds sigs map thing_inside
           -- todo replace val binds by own implementation
-        ; return (HsValBinds (ValBindsOut binds' sigs), thing) }
+        ; return (HsValBinds (ValBindsOut [binds'] sigs), ev_var, thing) }
 
 tcAletBinds EmptyLocalBinds _ _
   = panic "appfix: tcAletBinds not defined for empty bindings"
@@ -1429,7 +1429,7 @@ tcAletValBinds :: TopLevelFlag
            -> [(RecFlag, LHsBinds Name)] -> [LSig Name]
            -> AletIdentMap Name
            -> TcM thing
-           -> TcM ([(RecFlag, LHsBinds TcId)], thing) 
+           -> TcM ((RecFlag, LHsBinds TcId), EvVar, thing) 
 
 tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
   = do  {
@@ -1439,11 +1439,11 @@ tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
 
         ; poly_ids <- concat <$> checkNoErrs (mapAndRecoverM tcTySig ty_sigs)
 
-        ; (bs', thing) <- tcExtendIdEnv poly_ids $
+        ; (bs', ev_var, thing) <- tcExtendIdEnv poly_ids $
                           tcSingleAletGroup top_lvl sig_fn prag_fn 
                                             (bagToList bs) map thing_inside
 
-        ; return ([(rec_flag, bs')], thing) }
+        ; return ((rec_flag, bs'), ev_var, thing) }
 
 tcAletValBinds _ _ _ _ _ = panic "appfix: not strictly one recursive group in alet-bindings"
 
@@ -1452,21 +1452,21 @@ tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
                   -> [LHsBind Name]
                   -> AletIdentMap Name
                   -> TcM thing
-                  -> TcM (LHsBinds TcId, thing)
+                  -> TcM (LHsBinds TcId, EvVar, thing)
 
 tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside 
   = do { let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
        ; p_var <- newFlexiTyVar arrow_kind
        ; let p_type_var = mkTyVarTy p_var
 
-       ; _p_ev <- emit_var_constr p_type_var appfixClassName
+       ; p_ev <- emit_var_constr p_type_var appfixClassName
 
        ; (binds', ids, closed) <- tcAletPolyBinds top_lvl sig_fn prag_fn binds p_var
        ; ids' <- tcSwitchAletBindTypes map ids p_type_var
 
        -- proceed with the body of the alet-expression
        ; thing <- tcExtendLetEnv closed ids' thing_inside
-       ; return (binds', thing) }
+       ; return (binds', p_ev, thing) }
 
 -- switch types of bindings and emit new constraints
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]

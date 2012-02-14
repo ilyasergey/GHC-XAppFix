@@ -136,6 +136,9 @@ aletMapId = lookupUFM
 aletMapEmpty :: AletIdentMap id
 aletMapEmpty = emptyUFM
 
+aletEvVarInitial :: EvVar
+aletEvVarInitial = panic "appfix: Alet evidence variable is used before computed"
+
 -------------------------
 -- | A Haskell expression.
 data HsExpr id
@@ -189,6 +192,7 @@ data HsExpr id
 
   | HsAlet      (HsLocalBinds id) -- alet (ApplicativeFix)
                 (LHsExpr  id)
+                EvVar
                 (AletIdentMap id)
                 (AletTooling id)  -- a record containing the stuff we need in the
                                   -- alet transformation. This will be filled in by the
@@ -508,7 +512,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr _ _)
+ppr_expr (HsAlet binds expr _ _ _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 

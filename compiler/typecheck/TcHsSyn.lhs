@@ -626,10 +626,10 @@ zonkExpr env (HsLet binds expr)
     zonkLExpr new_env expr	`thenM` \ new_expr ->
     returnM (HsLet new_binds new_expr)
 
-zonkExpr env (HsAlet binds expr _aletIdsMap aletTooling) = -- panic "appfix: zonkExpr not implemented"
+zonkExpr env (HsAlet binds expr ev_var aletIdsMap aletTooling) = -- panic "appfix: zonkExpr not implemented"
   do (new_env, new_binds) <- zonkLocalBinds env binds	
      new_expr <- zonkLExpr new_env expr
-     return (HsAlet new_binds new_expr aletMapEmpty aletTooling)
+     return (HsAlet new_binds new_expr ev_var aletIdsMap aletTooling)
 
 zonkExpr env (HsDo do_or_lc stmts ty)
   = zonkStmts env stmts 	`thenM` \ (_, new_stmts) ->
