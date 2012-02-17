@@ -236,12 +236,11 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet binds expr ev_var _ _)
+rnExpr (HsAlet binds expr ev_var _ _ _)
   = do (tooling, fvTooling) <- lookupAletTooling
        rnLocalAletBindsAndThen binds $ \aletMapIds binds' ->
          do (expr', fvExpr) <- rnLExpr expr
-            return (HsAlet binds' expr' ev_var aletMapIds tooling, fvExpr `plusFV` fvTooling)
-
+            return (HsAlet binds' expr' ev_var aletHsWrapperInitial aletMapIds tooling, fvExpr `plusFV` fvTooling)
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))
 	; return ( HsDo do_or_lc stmts' placeHolderType, fvs ) }

@@ -1351,6 +1351,8 @@ data SkolemInfo
 
   | UnifyForAllSkol     -- We are unifying two for-all types
        TcType
+  
+  | AletSkol            -- Bound when checking alet-bindings
 
   | UnkSkol             -- Unhelpful info (until I improve it)
 
@@ -1373,6 +1375,7 @@ pprSkolInfo FamInstSkol     = ptext (sLit "the family instance declaration")
 pprSkolInfo BracketSkol     = ptext (sLit "a Template Haskell bracket")
 pprSkolInfo (RuleSkol name) = ptext (sLit "the RULE") <+> doubleQuotes (ftext name)
 pprSkolInfo ArrowSkol       = ptext (sLit "the arrow form")
+pprSkolInfo AletSkol        = ptext (sLit "the alet bindings")
 pprSkolInfo (PatSkol dc mc)  = sep [ ptext (sLit "a pattern with constructor")
                                    , nest 2 $ ppr dc <+> dcolon
                                               <+> ppr (dataConUserType dc) <> comma

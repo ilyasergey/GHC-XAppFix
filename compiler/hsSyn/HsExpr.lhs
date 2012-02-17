@@ -139,6 +139,10 @@ aletMapEmpty = emptyUFM
 aletEvVarInitial :: EvVar
 aletEvVarInitial = panic "appfix: Alet evidence variable is used before computed"
 
+aletHsWrapperInitial :: HsWrapper
+aletHsWrapperInitial = panic "HsAletWrapper hasn't yet been summoned"
+
+
 -------------------------
 -- | A Haskell expression.
 data HsExpr id
