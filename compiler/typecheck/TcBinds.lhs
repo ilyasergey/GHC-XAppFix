@@ -46,6 +46,7 @@ import BasicTypes
 import Outputable
 import FastString
 import PrelNames
+import UniqFM (listToUFM)
 import Type
 
 import Control.Monad
@@ -1410,12 +1411,13 @@ patMonoBindsCtxt pat grhss
 tcAletBinds :: HsLocalBinds Name 
             -> AletIdentMap Name
             -> TcM thing            
-            -> TcM (HsLocalBinds TcId, EvVar, thing)
+            -> TcM (HsLocalBinds TcId, AletIdentMap Id, EvVar, thing)
 
 tcAletBinds (HsValBinds (ValBindsOut binds sigs)) map thing_inside
-  = do  { (binds', ev_var, thing) <- tcAletValBinds NotTopLevel binds sigs map thing_inside
+  = do  { (binds', nmap, ev_var, thing) <-
+             tcAletValBinds NotTopLevel binds sigs map thing_inside
           -- todo replace val binds by own implementation
-        ; return (HsValBinds (ValBindsOut [binds'] sigs), ev_var, thing) }
+        ; return (HsValBinds (ValBindsOut [binds'] sigs), nmap, ev_var, thing) }
 
 tcAletBinds EmptyLocalBinds _ _
   = panic "appfix: tcAletBinds not defined for empty bindings"
@@ -1429,7 +1431,7 @@ tcAletValBinds :: TopLevelFlag
            -> [(RecFlag, LHsBinds Name)] -> [LSig Name]
            -> AletIdentMap Name
            -> TcM thing
-           -> TcM ((RecFlag, LHsBinds TcId), EvVar, thing) 
+           -> TcM ((RecFlag, LHsBinds TcId), AletIdentMap Id, EvVar, thing) 
 
 tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
   = do  {
@@ -1439,11 +1441,11 @@ tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
 
         ; poly_ids <- concat <$> checkNoErrs (mapAndRecoverM tcTySig ty_sigs)
 
-        ; (bs', ev_var, thing) <- tcExtendIdEnv poly_ids $
+        ; (bs', nmap, ev_var, thing) <- tcExtendIdEnv poly_ids $
                           tcSingleAletGroup top_lvl sig_fn prag_fn 
                                             (bagToList bs) map thing_inside
 
-        ; return ((rec_flag, bs'), ev_var, thing) }
+        ; return ((rec_flag, bs'), nmap, ev_var, thing) }
 
 tcAletValBinds _ _ _ _ _ = panic "appfix: not strictly one recursive group in alet-bindings"
 
@@ -1452,7 +1454,7 @@ tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
                   -> [LHsBind Name]
                   -> AletIdentMap Name
                   -> TcM thing
-                  -> TcM (LHsBinds TcId, EvVar, thing)
+                  -> TcM (LHsBinds TcId, AletIdentMap Id, EvVar, thing)
 
 tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside 
   = do { let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
@@ -1466,7 +1468,8 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
 
        -- proceed with the body of the alet-expression
        ; thing <- tcExtendLetEnv closed ids' thing_inside
-       ; return (binds', p_ev, thing) }
+       ; let nmap = listToUFM (zip ids ids')
+       ; return (binds', nmap, p_ev, thing) }
 
 -- switch types of bindings and emit new constraints
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
