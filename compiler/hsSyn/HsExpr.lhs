@@ -133,6 +133,10 @@ noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExp
 type AletIdentMap id = UniqFM id
 aletMapId :: Uniquable id => AletIdentMap id -> id -> Maybe id
 aletMapId = lookupUFM
+
+aletMapValues :: Uniquable id => AletIdentMap id -> [id]
+aletMapValues = eltsUFM
+
 aletMapEmpty :: AletIdentMap id
 aletMapEmpty = emptyUFM
 

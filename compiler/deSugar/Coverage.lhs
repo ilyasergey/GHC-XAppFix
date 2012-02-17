@@ -475,7 +475,15 @@ addTickHsExpr (HsLet binds e) =
 	liftM2 HsLet
 		(addTickHsLocalBinds binds) -- to think about: !patterns.
                 (addTickLHsExprLetBody e)
-addTickHsExpr (HsAlet _binds _e _ev_var _wrapper _aletIdsMap _tooling) = panic "appfix: addTickHsExpr not implemented"
+addTickHsExpr (HsAlet binds e ev_var wrapper aletIdsMap tooling) = 
+        let init_binds = collectLocalBinders binds
+            renamed_binds = aletMapValues aletIdsMap
+            binds_traversed = bindLocals init_binds $ addTickHsLocalBinds binds
+        in bindLocals renamed_binds $ 
+           do { e' <- addTickLHsExprLetBody e
+              ; binds' <- binds_traversed
+              ; return $ HsAlet binds' e' ev_var wrapper aletIdsMap tooling }
+             
 addTickHsExpr (HsDo cxt stmts srcloc) 
   = do { (stmts', _) <- addTickLStmts' forQual stmts (return ())
        ; return (HsDo cxt stmts' srcloc) }
