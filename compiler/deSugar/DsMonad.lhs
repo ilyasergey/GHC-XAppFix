@@ -13,7 +13,7 @@ module DsMonad (
         Applicative(..),(<$>),
 
         newLocalName,
-        duplicateLocalDs, newSysLocalDs, newSysLocalsDs, newUniqueId,
+        duplicateLocalDs, newSysLocalDs, newSysLocalsDs, newSysLocalTvDs, newUniqueId,
         newFailLocalDs, newPredVarDs,
         getSrcSpanDs, putSrcSpanDs,
         getModuleDs,
@@ -337,6 +337,9 @@ newPredVarDs pred
 newSysLocalDs, newFailLocalDs :: Type -> DsM Id
 newSysLocalDs  = mkSysLocalM (fsLit "ds")
 newFailLocalDs = mkSysLocalM (fsLit "fail")
+
+newSysLocalTvDs :: Kind -> DsM Id
+newSysLocalTvDs  = mkSysLocalTvM (fsLit "ds")
 
 newSysLocalsDs :: [Type] -> DsM [Id]
 newSysLocalsDs tys = mapM newSysLocalDs tys
