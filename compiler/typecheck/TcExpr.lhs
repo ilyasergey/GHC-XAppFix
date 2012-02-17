@@ -388,11 +388,11 @@ tcExpr (HsLet binds expr) res_ty
 			     tcMonoExpr expr res_ty   
 	; return (HsLet binds' expr') }
 
-tcExpr (HsAlet binds expr _ aletIdsMap _aletTooling) res_ty 
+tcExpr (HsAlet binds expr _ _ aletIdsMap _aletTooling) res_ty 
   = do  { (binds', naletIdsMap, ev_var, expr') <- tcAletBinds binds aletIdsMap $
 			             tcMonoExpr expr res_ty
         ; traceTc "tcExpr HsAlet" $ ppr $ ufmToList naletIdsMap
-	; return (HsAlet binds' expr' ev_var naletIdsMap
+	; return (HsAlet binds' expr' (panic "TODO: bWrapper") ev_var naletIdsMap
                          (panic "appfix: aletTooling not yet used, no rebindable syntax yet")) }
 
 tcExpr (HsCase scrut matches) exp_ty

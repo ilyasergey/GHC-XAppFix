@@ -190,12 +190,19 @@ data HsExpr id
   | HsLet       (HsLocalBinds id) -- let(rec)
                 (LHsExpr  id)
 
-  | HsAlet      (HsLocalBinds id) -- alet (ApplicativeFix)
-                (LHsExpr  id)
-                EvVar
-                (AletIdentMap id)
+  | HsAlet                        -- alet (ApplicativeFix)
+                (HsLocalBinds id) -- bindings
+                (LHsExpr  id)     -- body
+                EvVar             -- after type checking: 
+                                  -- the evidence variable representing the
+                                  -- "Applicative f" dictionary
+                HsWrapper         -- after type checking: the wrapper that corresponds to
+                                  -- the binding of the implicit "forall b. Applicative b"
+                                  -- constraint in effect in all of the bindings
+                (AletIdentMap id) -- map from variables bound in the bindings to
+                                  -- corresponding (separate) variables used in the body
                 (AletTooling id)  -- a record containing the stuff we need in the
-                                  -- alet transformation. This will be filled in by the
+                                  -- alet transformation. Filled in by the
                                   -- renamer
 
   | HsDo        (HsStmtContext Name) -- The parameterisation is unimportant
@@ -512,7 +519,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr _ _ _)
+ppr_expr (HsAlet binds expr _ _ _ _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 

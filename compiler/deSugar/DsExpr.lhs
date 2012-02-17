@@ -340,10 +340,10 @@ dsExpr (HsLet binds body) = do
     body' <- dsLExpr body
     dsLocalBinds binds body'
 
-dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) body appfixF_ev_var idsMap _tooling) =
-  dsAlet (bagToList lhsBindsBag) appfixF_ev_var idsMap body
+dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) body appfixF_ev_var bWrapper idsMap _tooling) =
+  dsAlet (bagToList lhsBindsBag) appfixF_ev_var bWrapper idsMap body
 
-dsExpr (HsAlet _ _body _ _aletIdsMap _tooling) = panic "appfix: should not occur"
+dsExpr (HsAlet _ _ _ _ _ _) = panic "appfix: should not occur"
 
 -- We need the `ListComp' form to use `deListComp' (rather than the "do" form)
 -- because the interpretation of `stmts' depends on what sort of thing it is.
@@ -642,8 +642,8 @@ Desugaring the alet construct
 
 \begin{code}
 
-dsAlet :: [LHsBind Id] -> EvId -> AletIdentMap Id -> LHsExpr Id -> DsM CoreExpr
-dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv aletIdentMap body = do
+dsAlet :: [LHsBind Id] -> EvId -> HsWrapper -> AletIdentMap Id -> LHsExpr Id -> DsM CoreExpr
+dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv _bWrapper aletIdentMap body = do
   -- first, get hold of the base library stuff we need
   [applicativeClassTyCon] <- mapM dsLookupTyCon [applicativeClassName]
   let lhsBinds = bagToList lhsBinds_
@@ -720,7 +720,9 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv aletIdentM
                          anonP1Id <- mkAnonPhantom1Id $ mkTyVarTy bId
                          appDictVar <- newSysLocalDs $ mkClassPred applicativeClass [mkTyVarTy bId]
                          pprDefiniteTrace "dsAlet pfId" (ppr pfId) $ do
-                         return $ mkCoreConApps wrapDataCon [Type fType, Type tsType, Type t, mkCoreLams [bId, appDictVar, anonP1Id] $ mkCoreApps (Var pfId) [Type (mkTyVarTy bId), Var appDictVar]]
+                         let res = mkCoreConApps wrapDataCon [Type fType, Type tsType, Type t, mkCoreLams [bId, appDictVar, anonP1Id] $ mkCoreApps (Var pfId) [Type (mkTyVarTy bId), Var appDictVar]]
+                         pprDefiniteTrace "dsAlet wrapPf res" (ppr res) $ do
+                         return res
                    -- ^ TODO: type arguments
   wrappedPfs <- forM (zip recIds vTypes) $ uncurry wrapPf 
   let fixpfs = foldr (\ (wt, (t, ots)) acc -> 
@@ -767,7 +769,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv aletIdentM
 
   return result
 
-dsAlet _ _ _ _ = panic "appfix: dsAlet: wrong type of bind..."
+dsAlet _ _ _ _ _ = panic "appfix: dsAlet: wrong type of bind..."
 \end{code}
 
 
