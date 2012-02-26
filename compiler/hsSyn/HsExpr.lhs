@@ -25,6 +25,7 @@ import HsTypes
 import HsBinds
 
 -- others:
+import Coercion
 import TcEvidence
 import CoreSyn
 import Var
@@ -146,6 +147,8 @@ aletEvVarInitial = panic "appfix: Alet evidence variable is used before computed
 aletHsWrapperInitial :: HsWrapper
 aletHsWrapperInitial = panic "HsAletWrapper hasn't yet been summoned"
 
+aletHsTArrDCoercionsInitial :: [Coercion]
+aletHsTArrDCoercionsInitial = panic "tArrDCoercion hasn't yet been summoned"
 
 -------------------------
 -- | A Haskell expression.
@@ -207,6 +210,7 @@ data HsExpr id
                 HsWrapper         -- after type checking: the wrapper that corresponds to
                                   -- the binding of the implicit "forall b. Applicative b"
                                   -- constraint in effect in all of the bindings
+                [Coercion]        -- the coercions from TArrD (Compose p b) ts (Compose p b t) to their expanded version, one coercion for every binding, with its type t
                 (AletIdentMap id) -- map from variables bound in the bindings to
                                   -- corresponding (separate) variables used in the body
                 (AletTooling id)  -- a record containing the stuff we need in the
@@ -527,7 +531,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr _ _ _ _)
+ppr_expr (HsAlet binds expr _ _ _ _ _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 

@@ -19,6 +19,7 @@ import DynFlags
 import HsSyn
 import HscTypes( isHsBoot )
 import TcRnMonad
+import Coercion
 import TcEnv
 import TcUnify
 import TcSimplify
@@ -48,7 +49,10 @@ import FastString
 import PrelNames
 import UniqFM (listToUFM)
 import Type
+import FamInstEnv
+import FamInst
 
+import Data.List ((\\))
 import Control.Monad
 
 #include "HsVersions.h"
@@ -1411,13 +1415,13 @@ patMonoBindsCtxt pat grhss
 tcAletBinds :: HsLocalBinds Name 
             -> AletIdentMap Name
             -> TcM thing            
-            -> TcM (HsLocalBinds TcId, AletIdentMap Id, EvVar, HsWrapper, thing)
+            -> TcM (HsLocalBinds TcId, AletIdentMap Id, EvVar, HsWrapper, [Coercion], thing)
 
 tcAletBinds (HsValBinds (ValBindsOut binds sigs)) map thing_inside
-  = do  { (binds', nmap, ev_var, wrapper, thing) <-
+  = do  { (binds', nmap, ev_var, wrapper, tArrDCoercions, thing) <-
              tcAletValBinds NotTopLevel binds sigs map thing_inside
           -- todo replace val binds by own implementation
-        ; return (HsValBinds (ValBindsOut [binds'] sigs), nmap, ev_var, wrapper, thing) }
+        ; return (HsValBinds (ValBindsOut [binds'] sigs), nmap, ev_var, wrapper, tArrDCoercions, thing) }
 
 tcAletBinds EmptyLocalBinds _ _
   = panic "appfix: tcAletBinds not defined for empty bindings"
@@ -1431,7 +1435,7 @@ tcAletValBinds :: TopLevelFlag
            -> [(RecFlag, LHsBinds Name)] -> [LSig Name]
            -> AletIdentMap Name
            -> TcM thing
-           -> TcM ((RecFlag, LHsBinds TcId), AletIdentMap Id, EvVar, HsWrapper, thing) 
+           -> TcM ((RecFlag, LHsBinds TcId), AletIdentMap Id, EvVar, HsWrapper, [Coercion], thing) 
 
 tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
   = do  {
@@ -1441,11 +1445,11 @@ tcAletValBinds top_lvl binds@((rec_flag, bs) : []) sigs map thing_inside
 
         ; poly_ids <- concat <$> checkNoErrs (mapAndRecoverM tcTySig ty_sigs)
 
-        ; (bs', nmap, ev_var, wrapper, thing) <- tcExtendIdEnv poly_ids $
+        ; (bs', nmap, ev_var, wrapper, tArrDCoercions, thing) <- tcExtendIdEnv poly_ids $
                           tcSingleAletGroup top_lvl sig_fn prag_fn 
                                             (bagToList bs) map thing_inside
 
-        ; return ((rec_flag, bs'), nmap, ev_var, wrapper, thing) }
+        ; return ((rec_flag, bs'), nmap, ev_var, wrapper, tArrDCoercions, thing) }
 
 
 tcAletValBinds _ _ _ _ _ = panic "appfix: not strictly one recursive group in alet-bindings"
@@ -1455,7 +1459,7 @@ tcSingleAletGroup :: TopLevelFlag -> SigFun -> PragFun
                   -> [LHsBind Name]
                   -> AletIdentMap Name
                   -> TcM thing
-                  -> TcM (LHsBinds TcId, AletIdentMap Id, EvVar, HsWrapper, thing)
+                  -> TcM (LHsBinds TcId, AletIdentMap Id, EvVar, HsWrapper, [Coercion], thing)
 
 tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside 
   = do { let arrow_kind = mkArrowKind liftedTypeKind liftedTypeKind
@@ -1464,7 +1468,7 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        ; p_ev <- emit_var_constr p_tp appfixClassName
 
        ; b_name <- newName (mkVarOccFS (fsLit "b"))
-       ; let b_var = mkTcTyVar b_name arrow_kind $ SkolemTv True       
+       ; let b_var = mkTcTyVar b_name arrow_kind $ SkolemTv False       
        ; cls <- tcLookupClass applicativeClassName
        ; let b_tp = mkTyVarTy b_var        
        ; let pred_tp = mkClassPred cls [b_tp]
@@ -1475,6 +1479,7 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        -- further coercions.
        ; (tc_ev_bs, (binds', ids, closed)) <- 
                     checkConstraints AletSkol [b_var] [b_ev] $ 
+                    tcExtendTyVarEnv2 [(b_name, arrow_kind)] $
                     tcAletPolyBinds top_lvl sig_fn prag_fn binds p_var b_var
 
        -- Make a wrapper using obtained evidence bindings
@@ -1482,30 +1487,51 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        ; let lam_wp = (mkWpLams [b_ev]) <.> hs_wp
        ; let tylam_wp = (mkWpTyLams [b_var]) <.> lam_wp
 
-       ; ids' <- tcSwitchAletBindTypes map ids p_tp
+       ; (tArrDCoercions, ids') <- tcSwitchAletBindTypes map ids p_tp
 
        -- proceed with the body of the alet-expression
+       ; pprDefiniteTrace "tcSingleAletGroup ids" (ppr ids) $ do
        ; thing <- tcExtendLetEnv closed ids' thing_inside
        ; let nmap = listToUFM (zip ids ids')
-       ; return (binds', nmap, p_ev, tylam_wp, thing) }
+       ; return (binds', nmap, p_ev, tylam_wp, tArrDCoercions, thing) }
+
+mkAletTArrDCoercions :: Type -> Type -> [Type] -> TcM [Coercion]
+mkAletTArrDCoercions p b ts = do
+  [tnilTyCon, tconsTyCon, composeTyCon, tArrDTyCon] <- mapM tcLookupTyCon [tnilTyConName, tconsTyConName, composeTyConName, tArrDTyConName]
+
+  let tnilTy = mkTyConApp tnilTyCon []
+      mkTConsTy t ts = mkTyConApp tconsTyCon [t,ts]
+      mkTypeListTy = foldr mkTConsTy tnilTy -- turns list of types [t1..tn] into type of the form t1 ::: ... ::: tn ::: TNil
+
+  let tArrDTypes = map (\t -> mkTyConApp tArrDTyCon [mkTyConApp composeTyCon [p, b], mkTypeListTy ts, mkTyConApp composeTyCon [p,b,t]]) ts
+
+  famInstEnvs <- tcGetFamInstEnvs
+  let coercionFor t = fst $ normaliseType famInstEnvs t
+  return $ map coercionFor tArrDTypes
 
 -- switch types of bindings and emit new constraints
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
                       -> TcType 
-                      -> TcM [TcId]           
-tcSwitchAletBindTypes map ids p_tp
-  = mapM process ids
+                      -> TcM ([Coercion], [TcId])
+tcSwitchAletBindTypes aletIdentMap ids p_tp
+  = do tsAndIds <- mapM process ids
+       let nids = map snd tsAndIds
+       let compTypes = map fst tsAndIds
+       let vTypes = map (\(_,_,t) -> t) compTypes
+       let ((p,b,_):_) = compTypes
+       tArrDCoercions <- mkAletTArrDCoercions p b vTypes
+       return (tArrDCoercions, nids)
   where process id 
           = do { let name = idName id 
-               ; case aletMapId map name of
+               ; case aletMapId aletIdentMap name of
                  Just(new_name) -> 
                   do { traceTc "switch-real-type:" (ppr $ idType id)
                      ; comp_fn <- tcLookupTyCon composeTyConName
-                     ; inner_tp <- peelAndReZonk (idType id) comp_fn
+                     ; (p, b, inner_tp) <- peelAndReZonk (idType id) comp_fn
                      ; traceTc "peeled type body:" (ppr $ inner_tp)
 
                      ; new_id <- mkLocalBinder new_name $ mkAppTy p_tp inner_tp
-                     ; return new_id }
+                     ; return ((p, b, inner_tp), new_id) }
                  _ -> panic "appfix: tcSwitchAletBindTypes" }
 \end{code}
 
@@ -1516,14 +1542,14 @@ for each binding
 
 v_i :: \forall tvs, b . (Applicative b) => Compose p b t_i
 
-we extract the type t_i from the type above and re-instantiate 
+we extract the types p, b and t_i from the type above and re-instantiate 
 all skolem variables, corresponding to tvs in it by newly 
 instanticated type variable types so they could be re-unified 
 when the body of alet-bindings is type-checked with respect 
 to the provided signature.
 
 \begin{code}
-peelAndReZonk :: TcType -> TyCon -> TcM TcType
+peelAndReZonk :: TcType -> TyCon -> TcM (TcType, TcType, TcType)
 peelAndReZonk t comp_fn
   | Just (_tv, body) <- splitForAllTy_maybe t
   = peelAndReZonk body comp_fn
@@ -1534,7 +1560,7 @@ peelAndReZonk t comp_fn
   , length args == 3
   = do { let tp = args !! 2
        ; zonked <- zonkType zonkWithNewTVars tp
-       ; return zonked}
+       ; return (args !! 0, args !! 1, zonked) }
   | otherwise
   = panic "peelAndReZonk: not an expected compose type"
   where zonkWithNewTVars tv =
@@ -1588,7 +1614,7 @@ tcAletInfer mono _closed tc_sig_fn prag_fn bind_list p_var b_var
        ; let poly_ids = map abe_poly exports
              final_closed = NotTopLevel
              abs_bind = L loc $ 
-                        AbsBinds { abs_tvs = qtvs
+                        AbsBinds { abs_tvs = qtvs \\ [b_var]
                                  , abs_ev_vars = givens, abs_ev_binds = ev_binds
                                  , abs_exports = exports, abs_binds = binds' }
 

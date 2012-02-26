@@ -36,7 +36,7 @@ module Id (
 	-- ** Simple construction
 	mkGlobalId, mkVanillaGlobal, mkVanillaGlobalWithInfo,
 	mkLocalId, mkLocalIdWithInfo, mkExportedLocalId,
-	mkSysLocal, mkSysLocalM, mkSysLocalTv, mkSysLocalTvM,
+	mkSysLocal, mkSysLocalM, 
         mkUserLocal, mkUserLocalM,
 	mkTemplateLocals, mkTemplateLocalsNum, mkTemplateLocal,
 	mkWorkerId, mkWiredInIdName,
@@ -262,14 +262,6 @@ mkSysLocal fs uniq ty = mkLocalId (mkSystemVarName uniq fs) ty
 
 mkSysLocalM :: MonadUnique m => FastString -> Type -> m Id
 mkSysLocalM fs ty = getUniqueM >>= (\uniq -> return (mkSysLocal fs uniq ty))
-
--- | Create a system local 'Id' for a type variable. These are local 'Id's 
--- (see "Var#globalvslocal") that are created by the compiler out of thin air
-mkSysLocalTv :: FastString -> Unique -> Kind -> Id
-mkSysLocalTv fs uniq kd = mkLocalId (mkSysTvName uniq fs) kd
-
-mkSysLocalTvM :: MonadUnique m => FastString -> Kind -> m Id
-mkSysLocalTvM fs ty = getUniqueM >>= (\uniq -> return (mkSysLocalTv fs uniq ty))
 
 -- | Create a user local 'Id'. These are local 'Id's (see "Var#globalvslocal") with a name and location that the user might recognize
 mkUserLocal :: OccName -> Unique -> Type -> SrcSpan -> Id

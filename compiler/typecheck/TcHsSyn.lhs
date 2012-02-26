@@ -46,6 +46,7 @@ import TcEvidence
 import TysPrim
 import TysWiredIn
 import Type
+import Coercion
 import Kind
 import DataCon
 import Name
@@ -61,7 +62,10 @@ import SrcLoc
 import Bag
 import FastString
 import Outputable
+import UniqFM
 -- import Data.Traversable( traverse )
+
+import Control.Monad (liftM, liftM2)
 \end{code}
 
 \begin{code}
@@ -527,6 +531,28 @@ zonkGRHSs env (GRHSs grhss binds)
     returnM (GRHSs new_grhss new_binds)
 \end{code}
 
+
+\begin{code}
+zonkCoercion :: ZonkEnv -> Coercion -> TcM Coercion
+zonkCoercion env co = go co
+  where 
+    go :: Coercion -> TcM Coercion
+    go (Refl t) = liftM Refl $ zonkTcTypeToType env t
+    go (TyConAppCo tc cos) = TyConAppCo tc <$> mapM go cos
+    go (AppCo co1 co2) = liftM2 AppCo (go co1) (go co2)
+    go (ForAllCo tv co) = ASSERT( isImmutableTyVar tv ) do
+                          co' <- go co
+                          tv' <- updateTyVarKindM zonkTcKind tv
+                          return (ForAllCo tv' co')
+    go (CoVarCo cv) = return $ CoVarCo $ zonkEvVarOcc env cv
+    go (AxiomInstCo ax cos) = AxiomInstCo ax <$> mapM go cos
+    go (UnsafeCo t1 t2) = liftM2 UnsafeCo (zonkTcTypeToType env t1) (zonkTcTypeToType env t2)
+    go (SymCo co) = SymCo <$> go co
+    go (TransCo co1 co2) = liftM2 TransCo (go co1) (go co2)
+    go (NthCo n co) = NthCo n <$> go co
+    go (InstCo co t) = liftM2 InstCo (go co) (zonkTcTypeToType env t)
+\end{code}
+
 %************************************************************************
 %*									*
 \subsection[BackSubst-HsExpr]{Running a zonkitution over a TypeCheckedExpr}
@@ -626,11 +652,19 @@ zonkExpr env (HsLet binds expr)
     zonkLExpr new_env expr	`thenM` \ new_expr ->
     returnM (HsLet new_binds new_expr)
 
-zonkExpr env (HsAlet binds expr ev_var bWrapper aletIdsMap aletTooling) = 
-  do (new_env, new_binds) <- zonkLocalBinds env binds	
+zonkExpr env (HsAlet binds expr ev_var bWrapper tArrDCoercions aletIdsMap aletTooling) =
+  do (env1, new_binds) <- zonkLocalBinds env binds	
+     naletIdsMap <- liftM listToUFM $ flip mapM (ufmToList aletIdsMap) $
+                    \(k,v) -> do nv <- zonkIdBndr env v
+                                 return (k,nv)
+     let new_env = extendIdZonkEnv env1 (map snd $ ufmToList naletIdsMap)
+     let n_ev_var = zonkEvVarOcc new_env ev_var
+     pprDefiniteTrace "zonkExpr naletIdsMap" (ppr $ ufmToList naletIdsMap) $ do
+     (new_env, new_bWrapper) <- zonkCoFn new_env bWrapper
      new_expr <- zonkLExpr new_env expr
-     (_new_env, new_bWrapper) <- zonkCoFn new_env bWrapper
-     return (HsAlet new_binds new_expr ev_var new_bWrapper aletIdsMap aletTooling)
+     ntArrDCoercions <- mapM (zonkCoercion new_env) tArrDCoercions
+     pprDefiniteTrace "zonkExpr end" (text "...") $ do
+     return (HsAlet new_binds new_expr n_ev_var new_bWrapper ntArrDCoercions naletIdsMap aletTooling)
 
 zonkExpr env (HsDo do_or_lc stmts ty)
   = zonkStmts env stmts 	`thenM` \ (_, new_stmts) ->

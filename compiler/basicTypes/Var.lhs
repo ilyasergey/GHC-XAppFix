@@ -67,7 +67,10 @@ module Var (
 
 	-- ** Modifying 'TyVar's
 	setTyVarName, setTyVarUnique, setTyVarKind, updateTyVarKind,
-        updateTyVarKindM
+        updateTyVarKindM,
+        
+        -- creating TyVar's
+        mkSysLocalTv
 
     ) where
 
@@ -449,4 +452,13 @@ isExportedId :: Var -> Bool
 isExportedId (Id { idScope = GlobalId })        = True
 isExportedId (Id { idScope = LocalId Exported}) = True
 isExportedId _ = False
+\end{code}
+
+
+\begin{code}
+-- | Create a system local 'Id' for a type variable. These are local 'Id's 
+-- (see "Var#globalvslocal") that are created by the compiler out of thin air
+mkSysLocalTv :: FastString -> Unique -> Kind -> Id
+mkSysLocalTv fs uniq kd = mkTyVar (mkSysTvName uniq fs) kd
+
 \end{code}

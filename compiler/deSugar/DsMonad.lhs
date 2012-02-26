@@ -52,6 +52,7 @@ import Bag
 import DataCon
 import TyCon
 import Id
+import Var
 import Module
 import Outputable
 import SrcLoc
@@ -334,6 +335,9 @@ newPredVarDs :: PredType -> DsM Var
 newPredVarDs pred
  = newSysLocalDs pred
  
+mkSysLocalTvM :: MonadUnique m => FastString -> Kind -> m Id
+mkSysLocalTvM fs ty = getUniqueM >>= (\uniq -> return (mkSysLocalTv fs uniq ty))
+
 newSysLocalDs, newFailLocalDs :: Type -> DsM Id
 newSysLocalDs  = mkSysLocalM (fsLit "ds")
 newFailLocalDs = mkSysLocalM (fsLit "fail")

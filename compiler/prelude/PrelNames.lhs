@@ -309,6 +309,7 @@ basicKnownKeyNames
         , phantom1TyConName
         , listUTyConName
         , wrapTArrDTyConName
+        , tArrDTyConName
         , tElemTyConName
         , zeroTyConName
         , succTyConName
@@ -1057,7 +1058,7 @@ liftMName          = varQual mONAD (fsLit "liftM") liftMIdKey
 mzipName           = varQual mONAD_ZIP (fsLit "mzip") mzipIdKey
 
 -- ApplicativeFix: alet definitions
-appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tElemTyConName, zeroTyConName, succTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, mkCProdDataConName, mkNilProdDataConName, tHereName, tThereName, projTProdName, nafix2Name :: Name
+appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tArrDTyConName, tElemTyConName, zeroTyConName, succTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, mkCProdDataConName, mkNilProdDataConName, tHereName, tThereName, projTProdName, nafix2Name :: Name
 appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") appfixClassKey
 composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") composeTyConKey
 tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") tconsTyConKey
@@ -1067,6 +1068,7 @@ phantomTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom") phantomTyConKe
 phantom1TyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Phantom1") phantom1TyConKey
 listUTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "ListU") listUTyConKey
 wrapTArrDTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "WrapTArrD") wrapTArrDTyConKey
+tArrDTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TArrD") tArrDTyConKey
 tElemTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "TElem") tElemTyConKey
 zeroTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Zero") zeroTyConKey
 succTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit "Succ") succTyConKey
@@ -1395,7 +1397,7 @@ repTyConKey  = mkPreludeTyConUnique 155
 rep1TyConKey = mkPreludeTyConUnique 156
 
 -- ApplicativeFix
-composeTyConKey, tconsTyConKey, tnilTyConKey, tprodTyConKey, phantomTyConKey, phantom1TyConKey, listUTyConKey, wrapTArrDTyConKey, tElemTyConKey, zeroTyConKey, succTyConKey :: Unique
+composeTyConKey, tconsTyConKey, tnilTyConKey, tprodTyConKey, phantomTyConKey, phantom1TyConKey, listUTyConKey, wrapTArrDTyConKey, tArrDTyConKey, tElemTyConKey, zeroTyConKey, succTyConKey :: Unique
 composeTyConKey = mkPreludeTyConUnique 157
 tconsTyConKey = mkPreludeTyConUnique 158
 tnilTyConKey = mkPreludeTyConUnique 159
@@ -1407,6 +1409,7 @@ wrapTArrDTyConKey = mkPreludeTyConUnique 164
 tElemTyConKey = mkPreludeTyConUnique 165
 zeroTyConKey = mkPreludeTyConUnique 166
 succTyConKey = mkPreludeTyConUnique 167
+tArrDTyConKey = mkPreludeTyConUnique 168
 
 
 ---------------- Template Haskell -------------------
