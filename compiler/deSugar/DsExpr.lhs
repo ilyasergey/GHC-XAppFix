@@ -341,7 +341,7 @@ dsExpr (HsLet binds body) = do
     dsLocalBinds binds body'
 
 dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) body appfixF_ev_var bWrapper tArrDCoercion idsMap _tooling) =
-  dsAlet (bagToList lhsBindsBag) appfixF_ev_var bWrapper tArrDCoercion idsMap body
+  dsAlet (bagToList lhsBindsBag) appfixF_ev_var bWrapper tArrDCoercion idsMap body 
 
 dsExpr (HsAlet _ _ _ _ _ _ _) = panic "appfix: should not occur"
 
