@@ -701,7 +701,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
                               -- should have been caught by the type checker...
       vTypes = map (snd . analyseComposedType) composedTypes
       fType = fst $ analyseComposedType $ head composedTypes 
-              -- ^ assumption: at least one binding
+              -- assumption: at least one binding
       tsType = mkTypeListTy vTypes
       fixedType = mkTyConApp tprodTyCon [fType, tsType]
   pprDefiniteTrace "dsAlet aletIdentMap" (ppr $ ufmToList aletIdentMap) $ do
