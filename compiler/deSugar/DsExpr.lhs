@@ -726,7 +726,6 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
         let _nco = substCo (Coercion.extendTvSubst emptyCvSubst bVar bTy) _co
         pprDefiniteTrace "dsAlet pfId" (ppr _pfId) $ do
         let res = mkCoreConApps wrapDataCon [Type fType, Type tsType, Type t, mkCoreLams [_bId, _appDictVar, _anonP1Id] $ Cast (mkCoreApps (Var _pfId) [Type (mkTyVarTy _bId), Var _appDictVar]) (SymCo _nco)]
-        -- ^ TODO: sym or not sym?
         pprDefiniteTrace "dsAlet wrapPf res" (ppr res) $ do
         return res
   wrappedPfs <- forM (zip (zip recIds vTypes) tArrDCoercions) $ uncurry $ uncurry wrapPf 
