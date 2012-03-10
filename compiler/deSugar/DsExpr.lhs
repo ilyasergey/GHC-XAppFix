@@ -698,7 +698,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
         , tyConName comp == composeTyConName
         = (f, v)
       analyseComposedType t = pprPanic "appfix: dsExpr wrong type" $ ppr t
-                              -- ^ should have been caught by the type checker...
+                              -- should have been caught by the type checker...
       vTypes = map (snd . analyseComposedType) composedTypes
       fType = fst $ analyseComposedType $ head composedTypes 
               -- ^ assumption: at least one binding
