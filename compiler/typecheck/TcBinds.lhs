@@ -1648,10 +1648,10 @@ tcAletLhs :: TcSigFun -> LetBndrSpec
           -> HsBind Name 
           -> TcM (TcMonoBind)
 tcAletLhs _sig_fn no_gen p_tp b_var (FunBind { fun_id = L nm_loc name, fun_infix = inf, fun_matches = matches })
-  -- | Just sig <- sig_fn name
-  -- = do  { mono_id <- newSigLetBndr no_gen name sig
-  --       ; return (TcFunBind (name, Just sig, mono_id) nm_loc inf matches) }
-  -- | otherwise
+  --   | Just sig <- sig_fn name
+  --   = do  { mono_id <- newSigLetBndr no_gen name sig
+  --         ; return (TcFunBind (name, Just sig, mono_id) nm_loc inf matches) }
+  --   | otherwise
   = do  { mono_ty <- newFlexiTyVarTy argTypeKind
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; let b_tp = mkTyVarTy b_var        
