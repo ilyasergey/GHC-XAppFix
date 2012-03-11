@@ -323,7 +323,7 @@ basicKnownKeyNames
         , tHereName
         , tThereName
         , projTProdName
-        , nafix2Name
+        , nafixName
     ]
 
 genericTyConNames :: [Name]
@@ -1058,7 +1058,7 @@ liftMName          = varQual mONAD (fsLit "liftM") liftMIdKey
 mzipName           = varQual mONAD_ZIP (fsLit "mzip") mzipIdKey
 
 -- ApplicativeFix: alet definitions
-appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tArrDTyConName, tElemTyConName, zeroTyConName, succTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, mkCProdDataConName, mkNilProdDataConName, tHereName, tThereName, projTProdName, nafix2Name :: Name
+appfixClassName, composeTyConName, tconsTyConName, tnilTyConName, tprodTyConName, phantomTyConName, phantom1TyConName, listUTyConName, wrapTArrDTyConName, tArrDTyConName, tElemTyConName, zeroTyConName, succTyConName, whooName, whoo1Name, tconsName, tnilName, wrapName, mkCProdDataConName, mkNilProdDataConName, tHereName, tThereName, projTProdName, nafixName :: Name
 appfixClassName = clsQual aPPLICATIVE_FIX (fsLit "ApplicativeFix") appfixClassKey
 composeTyConName = tcQual aPPLICATIVE_COMPOSE (fsLit "Compose") composeTyConKey
 tconsTyConName = tcQual aPPLICATIVE_GENERIFIX (fsLit ":::") tconsTyConKey
@@ -1082,7 +1082,7 @@ mkNilProdDataConName = conName aPPLICATIVE_GENERIFIX (fsLit "MkNilProd") mkNilPr
 tHereName = conName aPPLICATIVE_GENERIFIX (fsLit "THere") tHereDataConKey
 tThereName = conName aPPLICATIVE_GENERIFIX (fsLit "TThere") tThereDataConKey
 projTProdName = varQual aPPLICATIVE_GENERIFIX (fsLit "projTProd") projTProdIdKey
-nafix2Name = varQual aPPLICATIVE_GENERIFIX (fsLit "nafix2") nafix2IdKey
+nafixName = varQual aPPLICATIVE_GENERIFIX (fsLit "nafix") nafixIdKey
 
 
 -- Annotation type checking
@@ -1706,9 +1706,9 @@ mzipIdKey       = mkPreludeMiscIdUnique 196
 -----------------------------------------------------
 
 -- ApplicativeFix
-projTProdIdKey, nafix2IdKey :: Unique
+projTProdIdKey, nafixIdKey :: Unique
 projTProdIdKey = mkPreludeMiscIdUnique 501
-nafix2IdKey = mkPreludeMiscIdUnique 502
+nafixIdKey = mkPreludeMiscIdUnique 502
 \end{code}
 
 

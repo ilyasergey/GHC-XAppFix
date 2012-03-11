@@ -652,7 +652,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
    tHereDataCon, tThereDataCon, wrapDataCon, whooDataCon] <-
     mapM dsLookupDataCon [tnilName, tconsName, mkNilProdDataConName, mkCProdDataConName,
                           tHereName, tThereName, wrapName, whooName]
-  [nafix2Fun, projTProdFun] <- mapM ((Var <$>) . dsLookupGlobalId) [nafix2Name,projTProdName]
+  [nafixFun, projTProdFun] <- mapM ((Var <$>) . dsLookupGlobalId) [nafixName,projTProdName]
   let tnilTy = mkTyConApp tnilTyCon []
       mkTConsTy t ts = mkTyConApp tconsTyCon [t,ts]
       mkTypeListTy = foldr mkTConsTy tnilTy -- turns list of types [t1..tn] into type of the form t1 ::: ... ::: tn ::: TNil
@@ -690,7 +690,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
 
   let _pfuncsBind body = foldr (uncurry bindNonRec) body (zip recIds pfuncs)
 
-  -- now generate the fixed values with a nafix2 call
+  -- now generate the fixed values with a nafix call
   let analyseComposedType t 
         | (comp, [f, _bv2, v]) <- tcSplitTyConApp t
         --, Just bv2v <- tcGetTyVar_maybe bv2
@@ -734,8 +734,8 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
                        mkCoreConApps mkCProdDataCon
                           [Type wpfType, Type (mkTConsTy t ots), Type t, Type ots, Coercion (Refl (mkTConsTy t ots)), wt, acc])
               (nilProdVal wpfType) (zip wrappedPfs $ zip vTypes $ mkTailsListTys vTypes)
-  pprDefiniteTrace "dsAlet" (ppr nafix2Fun) $ do
-  let _bindFixedImp = Let $ NonRec fixedVar $ mkCoreApps nafix2Fun [Type fType, Type tsType, Var appfixFEv, tsListU, fixpfs]
+  pprDefiniteTrace "dsAlet" (ppr nafixFun) $ do
+  let _bindFixedImp = Let $ NonRec fixedVar $ mkCoreApps nafixFun [Type fType, Type tsType, Var appfixFEv, tsListU, fixpfs]
 
   let
     zeroTy = mkTyConApp zeroTyCon []

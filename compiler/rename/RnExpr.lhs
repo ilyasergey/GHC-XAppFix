@@ -894,7 +894,7 @@ lookupAletTooling =
     (HsVar tHereName)
     (HsVar tThereName)
     (HsVar projTProdName)
-    (HsVar nafix2Name)
+    (HsVar nafixName)
   , emptyFVs)
 \end{code}
 
