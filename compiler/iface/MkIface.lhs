@@ -109,8 +109,8 @@ import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.IORef
+import System.Directory
 import System.FilePath
-import System.Directory (getModificationTime)
 \end{code}
 
 
@@ -286,7 +286,7 @@ mkIface_ hsc_env maybe_old_fingerprint
                         mi_fixities    = fixities,
                         mi_warns       = warns,
                         mi_anns        = mkIfaceAnnotations anns,
-                        mi_globals     = Just rdr_env,
+                        mi_globals     = maybeGlobalRdrEnv rdr_env,
 
                         -- Left out deliberately: filled in by addFingerprints
                         mi_iface_hash  = fingerprint0,
@@ -343,7 +343,7 @@ mkIface_ hsc_env maybe_old_fingerprint
                 -- correctly.  This stems from the fact that the interface had
                 -- not changed, so addFingerprints returns the old ModIface
                 -- with the old GlobalRdrEnv (mi_globals).
-        ; let final_iface = new_iface{ mi_globals = Just rdr_env }
+        ; let final_iface = new_iface{ mi_globals = maybeGlobalRdrEnv rdr_env }
 
         ; return (errs_and_warns, Just (final_iface, no_change_at_all)) }}
   where
@@ -357,6 +357,17 @@ mkIface_ hsc_env maybe_old_fingerprint
      le_occ n1 n2 = nameOccName n1 <= nameOccName n2
 
      dflags = hsc_dflags hsc_env
+
+     -- We only fill in mi_globals if the module was compiled to byte
+     -- code.  Otherwise, the compiler may not have retained all the
+     -- top-level bindings and they won't be in the TypeEnv (see
+     -- Desugar.addExportFlagsAndRules).  The mi_globals field is used
+     -- by GHCi to decide whether the module has its full top-level
+     -- scope available.
+     maybeGlobalRdrEnv :: GlobalRdrEnv -> Maybe GlobalRdrEnv
+     maybeGlobalRdrEnv rdr_env
+         | targetRetainsAllBindings (hscTarget dflags) = Just rdr_env
+         | otherwise                                   = Nothing
 
      deliberatelyOmitted :: String -> a
      deliberatelyOmitted x = panic ("Deliberately omitted: " ++ x)
@@ -379,7 +390,7 @@ mkIface_ hsc_env maybe_old_fingerprint
 -----------------------------
 writeIfaceFile :: DynFlags -> ModLocation -> ModIface -> IO ()
 writeIfaceFile dflags location new_iface
-    = do createDirectoryHierarchy (takeDirectory hi_file_path)
+    = do createDirectoryIfMissing True (takeDirectory hi_file_path)
          writeBinIface dflags hi_file_path new_iface
     where hi_file_path = ml_hi_file location
 
@@ -583,7 +594,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
    --   - (some of) dflags
    -- it returns two hashes, one that shouldn't change
    -- the abi hash and one that should
-   flag_hash <- fingerprintDynFlags dflags putNameLiterally
+   flag_hash <- fingerprintDynFlags dflags this_mod putNameLiterally
 
    -- the ABI hash depends on:
    --   - decls
@@ -620,7 +631,7 @@ addFingerprints hsc_env mb_old_fingerprint iface0 new_decls
                 mi_orphan_hash = orphan_hash,
                 mi_flag_hash   = flag_hash,
                 mi_orphan      = not (null orph_rules && null orph_insts
-                                      && null (ifaceVectInfoVar (mi_vect_info iface0))),
+                                      && isNoIfaceVectInfo (mi_vect_info iface0)),
                 mi_finsts      = not . null $ mi_fam_insts iface0,
                 mi_decls       = sorted_decls,
                 mi_hash_fn     = lookupOccEnv local_env }
@@ -1208,7 +1219,9 @@ checkVersions hsc_env mod_summary iface
 checkFlagHash :: HscEnv -> ModIface -> IfG RecompileRequired
 checkFlagHash hsc_env iface = do
     let old_hash = mi_flag_hash iface
-    new_hash <- liftIO $ fingerprintDynFlags (hsc_dflags hsc_env) putNameLiterally
+    new_hash <- liftIO $ fingerprintDynFlags (hsc_dflags hsc_env)
+                                             (mi_module iface)
+                                             putNameLiterally
     case old_hash == new_hash of
         True  -> up_to_date (ptext $ sLit "Module flags unchanged")
         False -> out_of_date_hash (ptext $ sLit "  Module flags have changed")

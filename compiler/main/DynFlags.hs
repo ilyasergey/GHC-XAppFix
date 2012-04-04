@@ -31,6 +31,7 @@ module DynFlags (
         DynFlags(..),
         RtsOptsEnabled(..),
         HscTarget(..), isObjectTarget, defaultObjectTarget,
+        targetRetainsAllBindings,
         GhcMode(..), isOneShot,
         GhcLink(..), isNoLink,
         PackageFlag(..),
@@ -402,6 +403,7 @@ data ExtensionFlag
    | Opt_RebindableSyntax
    | Opt_ConstraintKinds
    | Opt_PolyKinds                -- Kind polymorphism
+   | Opt_DataKinds                -- Datatype promotion
 
    | Opt_StandaloneDeriving
    | Opt_DeriveDataTypeable
@@ -738,6 +740,17 @@ isObjectTarget HscC     = True
 isObjectTarget HscAsm   = True
 isObjectTarget HscLlvm  = True
 isObjectTarget _        = False
+
+-- | Does this target retain *all* top-level bindings for a module,
+-- rather than just the exported bindings, in the TypeEnv and compiled
+-- code (if any)?  In interpreted mode we do this, so that GHCi can
+-- call functions inside a module.  In HscNothing mode we also do it,
+-- so that Haddock can get access to the GlobalRdrEnv for a module
+-- after typechecking it.
+targetRetainsAllBindings :: HscTarget -> Bool
+targetRetainsAllBindings HscInterpreted = True
+targetRetainsAllBindings HscNothing     = True
+targetRetainsAllBindings _              = False
 
 -- | The 'GhcMode' tells us whether we're doing multi-module
 -- compilation (controlled via the "GHC" API) or one-shot
@@ -1946,6 +1959,7 @@ xFlags = [
   ( "RebindableSyntax",                 Opt_RebindableSyntax, nop ),
   ( "ConstraintKinds",                  Opt_ConstraintKinds, nop ),
   ( "PolyKinds",                        Opt_PolyKinds, nop ),
+  ( "DataKinds",                        Opt_DataKinds, nop ),
   ( "MonoPatBinds",                     Opt_MonoPatBinds,
     \ turn_on -> when turn_on $ deprecate "Experimental feature now removed; has no effect" ),
   ( "ExplicitForAll",                   Opt_ExplicitForAll, nop ),
@@ -2032,8 +2046,6 @@ impliedFlags
 
     , (Opt_TypeFamilies,     turnOn, Opt_KindSignatures)  -- Type families use kind signatures
                                                           -- all over the place
-
-    , (Opt_PolyKinds,        turnOn, Opt_KindSignatures)
 
     , (Opt_ImpredicativeTypes,  turnOn, Opt_RankNTypes)
 

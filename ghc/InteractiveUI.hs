@@ -130,7 +130,7 @@ builtin_commands = [
   ("def",       keepGoing (defineMacro False),  completeExpression),
   ("def!",      keepGoing (defineMacro True),   completeExpression),
   ("delete",    keepGoing deleteCmd,            noCompletion),
-  ("edit",      keepGoing editFile,             completeFilename),
+  ("edit",      keepGoing' editFile,            completeFilename),
   ("etags",     keepGoing createETagsFileCmd,   completeFilename),
   ("force",     keepGoing forceCmd,             completeExpression),
   ("forward",   keepGoing forwardCmd,           noCompletion),
@@ -224,7 +224,7 @@ helpText =
   "   :quit                       exit GHCi\n" ++
   "   :reload                     reload the current module set\n" ++
   "   :run function [<arguments> ...] run the function with the given arguments\n" ++
-  "   :script <filename>          run the script <filename>" ++
+  "   :script <filename>          run the script <filename>\n" ++
   "   :type <expr>                show the type of <expr>\n" ++
   "   :undef <cmd>                undefine user-defined command :<cmd>\n" ++
   "   :!<command>                 run the shell command <command>\n" ++
@@ -1030,15 +1030,16 @@ trySuccess act =
 -----------------------------------------------------------------------------
 -- :edit
 
-editFile :: String -> GHCi ()
+editFile :: String -> InputT GHCi ()
 editFile str =
-  do file <- if null str then chooseEditFile else return str
-     st <- getGHCiState
+  do file <- if null str then lift chooseEditFile else return str
+     st <- lift getGHCiState
      let cmd = editor st
      when (null cmd) 
        $ ghcError (CmdLineError "editor not set, use :set editor")
-     _ <- liftIO $ system (cmd ++ ' ':file)
-     return ()
+     code <- liftIO $ system (cmd ++ ' ':file)
+     when (code == ExitSuccess)
+       $ reloadModule ""
 
 -- The user didn't specify a file so we pick one for them.
 -- Our strategy is to pick the first module that failed to load,
@@ -1289,7 +1290,7 @@ setContextKeepingPackageModules keep_ctx transient_ctx = do
   new_rem_ctx <- if keep_ctx then return rem_ctx
                              else keepPackageImports rem_ctx
   setGHCiState st{ remembered_ctx = new_rem_ctx,
-                   transient_ctx  = transient_ctx }
+                   transient_ctx  = filterSubsumed new_rem_ctx transient_ctx }
   setGHCContextFromGHCiState
 
 
@@ -1626,8 +1627,12 @@ remModulesFromContext as bs = do
 addImportToContext :: String -> GHCi ()
 addImportToContext str = do
   idecl <- GHC.parseImportDecl str
+  _ <- GHC.lookupModule (unLoc (ideclName idecl)) (ideclPkgQual idecl)  -- #5836
   modifyGHCiState $ \st ->
-     st { remembered_ctx = addNotSubsumed (IIDecl idecl) (remembered_ctx st) }
+     st { remembered_ctx = addNotSubsumed (IIDecl idecl) (remembered_ctx st)
+        , transient_ctx = filter (not . ((IIDecl idecl) `iiSubsumes`))
+                                 (transient_ctx st)
+        }
   setGHCContextFromGHCiState
 
 setContext :: [String] -> [String] -> GHCi ()
@@ -1682,6 +1687,8 @@ setGHCContext iidecls = GHC.setContext (iidecls ++ prel)
 
 -- | Returns True if the left import subsumes the right one.  Doesn't
 -- need to be 100% accurate, conservatively returning False is fine.
+-- (EXCEPT: (IIModule m) *must* subsume itself, otherwise a panic in
+-- plusProv will ensue (#5904))
 --
 -- Note that an IIModule does not necessarily subsume an IIDecl,
 -- because e.g. a module might export a name that is only available
@@ -1718,6 +1725,12 @@ addNotSubsumed :: InteractiveImport
 addNotSubsumed i is
   | any (`iiSubsumes` i) is = is
   | otherwise               = i : filter (not . (i `iiSubsumes`)) is
+
+-- | @filterSubsumed is js@ returns the elements of @js@ not subsumed
+-- by any of @is@.
+filterSubsumed :: [InteractiveImport] -> [InteractiveImport]
+               -> [InteractiveImport]
+filterSubsumed is js = filter (\j -> not (any (`iiSubsumes` j) is)) js
 
 ----------------------------------------------------------------------------
 -- :set
