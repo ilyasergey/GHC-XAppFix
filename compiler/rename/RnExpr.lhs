@@ -236,11 +236,10 @@ rnExpr (HsLet binds expr)
     rnLExpr expr			 `thenM` \ (expr',fvExpr) ->
     return (HsLet binds' expr', fvExpr)
 
-rnExpr (HsAlet binds expr ev_var _ _ _ _)
-  = do (tooling, fvTooling) <- lookupAletTooling
-       rnLocalAletBindsAndThen binds $ \aletMapIds binds' ->
+rnExpr (HsAlet binds expr ev_var _ _ _)
+  = do rnLocalAletBindsAndThen binds $ \aletMapIds binds' ->
          do (expr', fvExpr) <- rnLExpr expr
-            return (HsAlet binds' expr' ev_var aletHsWrapperInitial aletHsTArrDCoercionsInitial aletMapIds tooling, fvExpr `plusFV` fvTooling)
+            return (HsAlet binds' expr' ev_var aletHsWrapperInitial aletHsTArrDCoercionsInitial aletMapIds , fvExpr)
 rnExpr (HsDo do_or_lc stmts _)
   = do 	{ ((stmts', _), fvs) <- rnStmts do_or_lc stmts (\ _ -> return ((), emptyFVs))
 	; return ( HsDo do_or_lc stmts' placeHolderType, fvs ) }
@@ -871,31 +870,6 @@ lookupStmtName ctxt n
   where
     rebindable     = lookupSyntaxName n
     not_rebindable = return (HsVar n, emptyFVs)
-
-lookupAletTooling :: RnM (AletTooling Name, FreeVars)
-lookupAletTooling =
-  -- appfix TODO: Rebindable syntax?
-  return (MkAletTooling
-    (HsVar appfixClassName)
-    (HsVar composeTyConName)
-    (HsVar tconsTyConName)
-    (HsVar tnilTyConName)
-    (HsVar tprodTyConName)
-    (HsVar phantomTyConName)
-    (HsVar phantom1TyConName)
-    (HsVar listUTyConName)
-    (HsVar wrapTArrDTyConName)
-    (HsVar tElemTyConName)
-    (HsVar whooName)
-    (HsVar whoo1Name)
-    (HsVar tconsName)
-    (HsVar tnilName)
-    (HsVar wrapName)
-    (HsVar tHereName)
-    (HsVar tThereName)
-    (HsVar projTProdName)
-    (HsVar nafixName)
-  , emptyFVs)
 \end{code}
 
 Note [Renaming parallel Stmts]

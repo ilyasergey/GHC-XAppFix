@@ -388,12 +388,11 @@ tcExpr (HsLet binds expr) res_ty
 			     tcMonoExpr expr res_ty   
 	; return (HsLet binds' expr') }
 
-tcExpr (HsAlet binds expr _ _ _ aletIdsMap _aletTooling) res_ty 
+tcExpr (HsAlet binds expr _ _ _ aletIdsMap) res_ty 
   = do  { (binds', naletIdsMap, ev_var, wrapper, tArrDCoercions, expr') <- tcAletBinds binds aletIdsMap $
 			             tcMonoExpr expr res_ty
         ; traceTc "tcExpr HsAlet" $ ppr $ ufmToList naletIdsMap
-	; return (HsAlet binds' expr' ev_var wrapper tArrDCoercions naletIdsMap
-                         (panic "appfix: aletTooling not yet used, no rebindable syntax yet")) }
+	; return (HsAlet binds' expr' ev_var wrapper tArrDCoercions naletIdsMap) }
 
 tcExpr (HsCase scrut matches) exp_ty
   = do	{  -- We used to typecheck the case alternatives first.

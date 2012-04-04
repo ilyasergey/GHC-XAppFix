@@ -104,31 +104,6 @@ type SyntaxTable id = [(Name, SyntaxExpr id)]
 noSyntaxTable :: SyntaxTable id
 noSyntaxTable = []
 
-data AletTooling idR = MkAletTooling {
-    atAppfixClass :: SyntaxExpr idR
-  , atComposeTyCon :: SyntaxExpr idR
-  , atTConsTyCon :: SyntaxExpr idR
-  , atTNilTyCon :: SyntaxExpr idR
-  , atTProdTyCon :: SyntaxExpr idR
-  , atPhantomTyCon :: SyntaxExpr idR
-  , atPhantom1TyCon :: SyntaxExpr idR
-  , atListUTyCon :: SyntaxExpr idR
-  , atWrapTArrDTyCon :: SyntaxExpr idR
-  , atTElemTyCon :: SyntaxExpr idR
-  , atWhoo :: SyntaxExpr idR
-  , atWhoo1 :: SyntaxExpr idR
-  , atTCons :: SyntaxExpr idR
-  , atTNil :: SyntaxExpr idR
-  , atWrap :: SyntaxExpr idR
-  , atTHere :: SyntaxExpr idR
-  , atTThere :: SyntaxExpr idR
-  , atProjTProd :: SyntaxExpr idR
-  , atNafix2 :: SyntaxExpr idR
-  } deriving (Data, Typeable)
-
-noAletTooling :: AletTooling id
-noAletTooling = MkAletTooling noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr noSyntaxExpr 
-
 -- a map of the names of binders inside the alet to the corresponding names
 -- which are in scope in the "in"-branch
 type AletIdentMap id = UniqFM id
@@ -213,9 +188,6 @@ data HsExpr id
                 [Coercion]        -- the coercions from TArrD (Compose p b) ts (Compose p b t) to their expanded version, one coercion for every binding, with its type t
                 (AletIdentMap id) -- map from variables bound in the bindings to
                                   -- corresponding (separate) variables used in the body
-                (AletTooling id)  -- a record containing the stuff we need in the
-                                  -- alet transformation. Filled in by the
-                                  -- renamer
 
   | HsDo        (HsStmtContext Name) -- The parameterisation is unimportant
                                      -- because in this context we never use
@@ -531,7 +503,7 @@ ppr_expr (HsLet binds expr)
   = sep [hang (ptext (sLit "let")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 
-ppr_expr (HsAlet binds expr _ _ _ _ _)
+ppr_expr (HsAlet binds expr _ _ _ _)
   = sep [hang (ptext (sLit "alet")) 2 (pprBinds binds),
          hang (ptext (sLit "in"))  2 (ppr expr)]
 

@@ -340,10 +340,10 @@ dsExpr (HsLet binds body) = do
     body' <- dsLExpr body
     dsLocalBinds binds body'
 
-dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) body appfixF_ev_var bWrapper tArrDCoercion idsMap _tooling) =
+dsExpr (HsAlet (HsValBinds (ValBindsOut [(Recursive, lhsBindsBag)] _sigs)) body appfixF_ev_var bWrapper tArrDCoercion idsMap) =
   dsAlet (bagToList lhsBindsBag) appfixF_ev_var bWrapper tArrDCoercion idsMap body 
 
-dsExpr (HsAlet _ _ _ _ _ _ _) = panic "appfix: should not occur"
+dsExpr (HsAlet _ _ _ _ _ _) = panic "appfix: should not occur"
 
 -- We need the `ListComp' form to use `deListComp' (rather than the "do" form)
 -- because the interpretation of `stmts' depends on what sort of thing it is.

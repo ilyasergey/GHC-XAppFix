@@ -475,14 +475,14 @@ addTickHsExpr (HsLet binds e) =
 	liftM2 HsLet
 		(addTickHsLocalBinds binds) -- to think about: !patterns.
                 (addTickLHsExprLetBody e)
-addTickHsExpr (HsAlet binds e ev_var wrapper tcCoercion aletIdsMap tooling) = 
+addTickHsExpr (HsAlet binds e ev_var wrapper tcCoercion aletIdsMap) = 
         let init_binds = collectLocalBinders binds
             renamed_binds = aletMapValues aletIdsMap
             binds_traversed = bindLocals init_binds $ addTickHsLocalBinds binds
         in bindLocals renamed_binds $ 
            do { e' <- addTickLHsExprLetBody e
               ; binds' <- binds_traversed
-              ; return $ HsAlet binds' e' ev_var wrapper tcCoercion aletIdsMap tooling }
+              ; return $ HsAlet binds' e' ev_var wrapper tcCoercion aletIdsMap }
              
 addTickHsExpr (HsDo cxt stmts srcloc) 
   = do { (stmts', _) <- addTickLStmts' forQual stmts (return ())
