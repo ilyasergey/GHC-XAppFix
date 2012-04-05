@@ -680,7 +680,9 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
                   case vs of [] -> return $ dsHsWrapper co_fn rhs
                              _ -> panic "appfix: dsExpr: matchWrapper returns non-empty vs"
              _ -> panic "appfix: dsExpr: wrong type of bind"
-  let pfuncs = map (dsHsWrapper bWrapper . mkCoreLets (dsTcEvBinds ev_binds) . mkLams ids) tRHSs
+  let pfuncs = map (dsHsWrapper bWrapper . 
+                    mkCoreLets (dsTcEvBinds ev_binds) .
+                    mkLams ids) tRHSs
   let (WpCompose (WpTyLam bVar) (WpCompose (WpEvLam bEvVar) _)) = bWrapper
       appBEvType = idType bEvVar
   let composedTypes = map idType ids
@@ -688,7 +690,7 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
       mkRecId id = newUniqueId id (recFunTy (idType id))
   recIds <- mapM mkRecId ids
 
-  let _pfuncsBind body = foldr (uncurry bindNonRec) body (zip recIds pfuncs)
+  let pfuncsBind body = foldr (uncurry bindNonRec) body (zip recIds pfuncs)
 
   -- now generate the fixed values with a nafix call
   let analyseComposedType t 
@@ -701,11 +703,11 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
                               -- should have been caught by the type checker...
       vTypes = map (snd . analyseComposedType) composedTypes
       fType = fst $ analyseComposedType $ head composedTypes 
-              -- assumption: at least one binding
+              -- assumption: at least one binding, all using same f
       tsType = mkTypeListTy vTypes
-      fixedType = mkTyConApp tprodTyCon [fType, tsType]
+      fixedType = mkForAllTys tvs $ mkFunTys (map idType evvs) $ mkTyConApp tprodTyCon [fType, tsType]
   pprDefiniteTrace "dsAlet aletIdentMap" (ppr $ ufmToList aletIdentMap) $ do
-  pprDefiniteTrace "dsAlet fixedType" (ppr fixedType) $ do
+  --pprDefiniteTrace "dsAlet fixedType" (ppr fixedType) $ do
   fixedVar <- newSysLocalDs fixedType
 
       -- lookup the coercion that expands TArrD (Compose f b) as (Compose f b t)) 
@@ -718,14 +720,14 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
       tsListU = mkTypeListU vTypes
       nilProdVal f = mkCoreConApps mkNilProdDataCon [Type f, Type tnilTy, Coercion (Refl tnilTy)]
       mkAnonPhantom1Id t = newSysLocalDs (mkTyConApp phantom1TyCon [t])
-      wrapPf _pfId t _co = do
-        _bId <- newSysLocalTvDs starToStar
-        let bTy = mkTyVarTy _bId
+      wrapPf _pfId t co = do
+        bId <- newSysLocalTvDs starToStar
+        let bTy = mkTyVarTy bId
         _anonP1Id <- mkAnonPhantom1Id bTy
-        _appDictVar <- newSysLocalDs $ mkClassPred applicativeClass [mkTyVarTy _bId]
-        let _nco = substCo (Coercion.extendTvSubst emptyCvSubst bVar bTy) _co
+        _appDictVar <- newSysLocalDs $ mkClassPred applicativeClass [mkTyVarTy bId]
+        let nco = substCo (Coercion.extendTvSubst emptyCvSubst bVar bTy) co
         pprDefiniteTrace "dsAlet pfId" (ppr _pfId) $ do
-        let res = mkCoreConApps wrapDataCon [Type fType, Type tsType, Type t, mkCoreLams [_bId, _appDictVar, _anonP1Id] $ Cast (mkCoreApps (Var _pfId) [Type (mkTyVarTy _bId), Var _appDictVar]) (SymCo _nco)]
+        let res = mkCoreConApps wrapDataCon [Type fType, Type tsType, Type t, mkCoreLams [bId, _appDictVar, _anonP1Id] $ Cast (mkCoreApps (Var _pfId) [Type (mkTyVarTy bId), Var _appDictVar]) (SymCo nco)]
         pprDefiniteTrace "dsAlet wrapPf res" (ppr res) $ do
         return res
   wrappedPfs <- forM (zip (zip recIds vTypes) tArrDCoercions) $ uncurry $ uncurry wrapPf 
@@ -734,8 +736,11 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
                        mkCoreConApps mkCProdDataCon
                           [Type wpfType, Type (mkTConsTy t ots), Type t, Type ots, Coercion (Refl (mkTConsTy t ots)), wt, acc])
               (nilProdVal wpfType) (zip wrappedPfs $ zip vTypes $ mkTailsListTys vTypes)
-  pprDefiniteTrace "dsAlet" (ppr nafixFun) $ do
-  let _bindFixedImp = Let $ NonRec fixedVar $ mkCoreApps nafixFun [Type fType, Type tsType, Var appfixFEv, tsListU, fixpfs]
+  -- pprDefiniteTrace "dsAlet" (ppr nafixFun) $ do
+  let bindFixedImp = Let (NonRec fixedVar $ 
+                          mkLams tvs $ mkLams evvs $ 
+                          pfuncsBind $
+                          mkCoreApps nafixFun [Type fType, Type tsType, Var appfixFEv, tsListU, fixpfs])
 
   let
     zeroTy = mkTyConApp zeroTyCon []
@@ -756,21 +761,24 @@ dsAlet [L _ (AbsBinds tvs evvs exports ev_binds lhsBinds_)] appfixFEv bWrapper t
   let mk_bind (id, t, pts, rts) =
         let Just export = find ((== id) . abe_mono) exports
         in mk_bind' id t pts rts export
-      mk_bind' _id t pts rts (ABE { abe_wrap = _wrap, abe_poly = global
+      mk_bind' _id t pts rts (ABE { abe_wrap = wrap, abe_poly = global
                                   , abe_mono = _local, abe_prags = _spec_prags }) = do
+        pprDefiniteTrace "dsAlet export wrap" (ppr wrap $$ ppr global $$ ppr _local) $ do
         let resultVar = fromJust $ aletMapId aletIdentMap global
-        let def = mkCoreApps projTProdFun
+        let def = dsHsWrapper wrap $
+                  mkLams tvs $ mkLams evvs $
+                  mkCoreApps projTProdFun
                     [Type (nTy (length pts)), Type t, Type (foldr mkTConsTy rts (pts ++ [t])),
-                     Type fType, mkElemProof pts t rts, Var fixedVar]
+                     Type fType, mkElemProof pts t rts, 
+                     mkVarApps (Var fixedVar) (tvs ++ evvs)]
         return $ (resultVar, def)
         
-  _resultBinds <- mapM mk_bind $ zip4 ids vTypes (inits vTypes) (mkTailsListTys vTypes)
-  let _bindResults bs body = foldr (uncurry bindNonRec) body bs
+  resultBinds <- mapM mk_bind $ zip4 ids vTypes (inits vTypes) (mkTailsListTys vTypes)
+  let bindResults bs body = foldr (uncurry bindNonRec) body bs
 
-  _dsBody <- dsLExpr body
+  dsBody <- dsLExpr body
   pprDefiniteTrace "dsAlet tvs" (ppr tvs $$ ppr evvs) $ do
-  let result = mkCoreLams tvs $ mkCoreLams evvs $ 
-              _pfuncsBind $ _bindFixedImp $ _bindResults _resultBinds _dsBody
+  let result = bindFixedImp $ bindResults resultBinds dsBody
   
   -- _ <- pprPanic "appfix: dsExpr not implemented" $ ppr result 
 

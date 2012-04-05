@@ -24,7 +24,8 @@ module FamInstEnv (
 	lookupFamInstEnv, lookupFamInstEnvConflicts, lookupFamInstEnvConflicts',
 	
 	-- Normalisation
-	topNormaliseType, normaliseType, normaliseTcApp
+	topNormaliseType, normaliseType, normaliseTcApp,
+        FamilyInstEnv(..)
     ) where
 
 #include "HsVersions.h"

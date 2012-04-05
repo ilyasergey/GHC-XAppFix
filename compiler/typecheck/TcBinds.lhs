@@ -1477,7 +1477,7 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        -- Solve constraints imposed by tcAletPolyBinds
        -- and deliver appropriate evidence bindings for 
        -- further coercions.
-       ; (tc_ev_bs, (binds', ids, closed)) <- 
+       ; (tc_ev_bs, (binds', ids, closed, tArrDCoercions)) <- 
                     checkConstraints AletSkol [b_var] [b_ev] $ 
                     tcExtendTyVarEnv2 [(b_name, arrow_kind)] $
                     tcAletPolyBinds top_lvl sig_fn prag_fn binds p_var b_var
@@ -1487,7 +1487,7 @@ tcSingleAletGroup top_lvl sig_fn prag_fn binds map thing_inside
        ; let lam_wp = (mkWpLams [b_ev]) <.> hs_wp
        ; let tylam_wp = (mkWpTyLams [b_var]) <.> lam_wp
 
-       ; (tArrDCoercions, ids') <- tcSwitchAletBindTypes map ids p_tp
+       ; ids' <- tcSwitchAletBindTypes map ids p_tp
 
        -- proceed with the body of the alet-expression
        ; pprDefiniteTrace "tcSingleAletGroup ids" (ppr ids) $ do
@@ -1501,37 +1501,42 @@ mkAletTArrDCoercions p b ts = do
 
   let tnilTy = mkTyConApp tnilTyCon []
       mkTConsTy t ts = mkTyConApp tconsTyCon [t,ts]
-      mkTypeListTy = foldr mkTConsTy tnilTy -- turns list of types [t1..tn] into type of the form t1 ::: ... ::: tn ::: TNil
+      mkTypeListTy = foldr mkTConsTy tnilTy
+      -- turns list of types [t1..tn] into type of the form t1 ::: ... ::: tn ::: TNil
 
-  let tArrDTypes = map (\t -> mkTyConApp tArrDTyCon [mkTyConApp composeTyCon [p, b], mkTypeListTy ts, mkTyConApp composeTyCon [p,b,t]]) ts
+  let tArrDArgs = map (\t -> [mkTyConApp composeTyCon [p, b], mkTypeListTy ts, mkTyConApp composeTyCon [p,b,t]]) ts
 
   famInstEnvs <- tcGetFamInstEnvs
-  let coercionFor t = fst $ normaliseType famInstEnvs t
-  return $ map coercionFor tArrDTypes
+  let coercionFor args = fst $ normaliseTcApp famInstEnvs tArrDTyCon args
+      result = map coercionFor tArrDArgs
+  pprDefiniteTrace "mkAletTArrDCoercions" (ppr result) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ lookupUFM (fst famInstEnvs) tArrDTyCon) $ do
+  -- let (Just (FamIE [_nilInst, _consInst] _)) = lookupUFM (fst famInstEnvs) tArrDTyCon
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ fi_tcs _consInst) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ fi_tvs _consInst) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ fi_tys _consInst) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ [(take 1 $ tail $ fi_tys _consInst), (take 1 $ tail $ head tArrDArgs)]) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ tcMatchTys (fi_tvs _consInst) (take 1 $ tail $ fi_tys _consInst) (take 1 $ tail $ head tArrDArgs)) $ do
+  -- pprDefiniteTrace "mkAletTArrDCoercions" (ppr $ map (lookupFamInstEnv famInstEnvs tArrDTyCon) tArrDArgs) $ do
+  return result
 
 -- switch types of bindings and emit new constraints
 tcSwitchAletBindTypes :: AletIdentMap Name -> [TcId]
                       -> TcType 
-                      -> TcM ([Coercion], [TcId])
+                      -> TcM [TcId]
 tcSwitchAletBindTypes aletIdentMap ids p_tp
-  = do tsAndIds <- mapM process ids
-       let nids = map snd tsAndIds
-       let compTypes = map fst tsAndIds
-       let vTypes = map (\(_,_,t) -> t) compTypes
-       let ((p,b,_):_) = compTypes
-       tArrDCoercions <- mkAletTArrDCoercions p b vTypes
-       return (tArrDCoercions, nids)
+  = mapM process ids
   where process id 
           = do { let name = idName id 
                ; case aletMapId aletIdentMap name of
                  Just(new_name) -> 
                   do { traceTc "switch-real-type:" (ppr $ idType id)
                      ; comp_fn <- tcLookupTyCon composeTyConName
-                     ; (p, b, inner_tp) <- peelAndReZonk (idType id) comp_fn
+                     ; (binders, inner_tp) <- peelCompType (idType id) comp_fn
                      ; traceTc "peeled type body:" (ppr $ inner_tp)
 
-                     ; new_id <- mkLocalBinder new_name $ mkAppTy p_tp inner_tp
-                     ; return ((p, b, inner_tp), new_id) }
+                     ; new_id <- mkLocalBinder new_name $ binders $ mkAppTy p_tp inner_tp
+                     ; return new_id }
                  _ -> panic "appfix: tcSwitchAletBindTypes" }
 \end{code}
 
@@ -1549,33 +1554,26 @@ when the body of alet-bindings is type-checked with respect
 to the provided signature.
 
 \begin{code}
-peelAndReZonk :: TcType -> TyCon -> TcM (TcType, TcType, TcType)
-peelAndReZonk t comp_fn
-  | Just (_tv, body) <- splitForAllTy_maybe t
-  = peelAndReZonk body comp_fn
-  | Just (_fun, arg) <- splitFunTy_maybe t
-  = peelAndReZonk arg comp_fn
-  | Just (tycon, args) <- splitTyConApp_maybe t
-  , tycon == comp_fn
-  , length args == 3
-  = do { let tp = args !! 2
-       ; zonked <- zonkType zonkWithNewTVars tp
-       ; return (args !! 0, args !! 1, zonked) }
-  | otherwise
-  = panic "peelAndReZonk: not an expected compose type"
-  where zonkWithNewTVars tv =
-         if isTcTyVar tv
-         then case tcTyVarDetails tv of
-                SkolemTv {}    -> do { traceTc "appfix: skolem" (ppr tv)
-                                     ; newFlexiTyVarTy $ tyVarKind tv }
-                _              -> return $ mkTyVarTy tv
-         else return $ mkTyVarTy tv                     
+peelCompType :: TcType -> TyCon -> TcM (TcType -> TcType, TcType)
+peelCompType t comp_fn = go t id
+ where go :: TcType -> (TcType -> TcType) -> TcM (TcType -> TcType, TcType) 
+       go t acc
+         | Just (tv, body) <- splitForAllTy_maybe t =
+           go body (acc . mkForAllTy tv)
+       -- domi: is the following needed? Just for evidence binds?
+         | Just (fun, arg) <- splitFunTy_maybe t =
+           go arg (acc . mkFunTy fun)
+         | Just (tycon, args) <- splitTyConApp_maybe t
+         , tycon == comp_fn
+         , length args == 3 = return (acc, args !! 2)
+         | otherwise =
+           panic "peelAndReZonk: not an expected compose type"
 
 
 -- Supply constraints and infer types
 tcAletPolyBinds :: TopLevelFlag -> SigFun -> PragFun
                 -> [LHsBind Name] -> TcTyVar -> TcTyVar
-                -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
+                -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, [Coercion])
 tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_var b_var
   = setSrcSpan loc                              $ do
     -- I'm not sure if we need this
@@ -1584,9 +1582,9 @@ tcAletPolyBinds _top_lvl sig_fn prag_fn bind_list p_var b_var
     ; traceTc "Bindings for" (ppr binder_names)
 
     ; tc_sig_fn <- tcInstSigs sig_fn binder_names
-    ; result <- tcAletInfer True True tc_sig_fn prag_fn bind_list p_var b_var            
+    ; tcAletInfer True True tc_sig_fn prag_fn bind_list p_var b_var            
 
-    ; return result }
+    }
   where
     binder_names = collectHsBindListBinders bind_list
     loc = foldr1 combineSrcSpans (map getLoc bind_list)
@@ -1598,9 +1596,9 @@ tcAletInfer
   -> TcSigFun -> PragFun
   -> [LHsBind Name]
   -> TcTyVar -> TcTyVar
-  -> TcM (LHsBinds TcId, [TcId], TopLevelFlag)
+  -> TcM (LHsBinds TcId, [TcId], TopLevelFlag, [Coercion])
 tcAletInfer mono _closed tc_sig_fn prag_fn bind_list p_var b_var
-  = do { ((binds', mono_infos), wanted) 
+  = do { ((binds', mono_infos, tArrDCoercions), wanted) 
              <- captureConstraints $
                 tcAletMonoBinds tc_sig_fn LetLclBndr bind_list p_var b_var
 
@@ -1620,16 +1618,19 @@ tcAletInfer mono _closed tc_sig_fn prag_fn bind_list p_var b_var
 
        ; traceTc "alet binding:" (ppr final_closed $$
                              ppr (poly_ids `zip` map idType poly_ids))
-       ; return (unitBag abs_bind, poly_ids, final_closed)   
+       ; return (unitBag abs_bind, poly_ids, final_closed, tArrDCoercions)   
   } 
   
 
 tcAletMonoBinds :: TcSigFun -> LetBndrSpec 
                 -> [LHsBind Name]           
                 -> TcTyVar -> TcTyVar
-                -> TcM (LHsBinds TcId, [MonoBindInfo])
+                -> TcM (LHsBinds TcId, [MonoBindInfo], [Coercion])
 tcAletMonoBinds sig_fn no_gen binds p_var b_var
-  = do  { tc_binds <- mapM (wrapLocM $ tcAletLhs sig_fn no_gen (mkTyVarTy p_var) b_var) binds
+  = do  { tc_binds_and_tys <- mapM (wrapLocM $ tcAletLhs sig_fn no_gen (mkTyVarTy p_var) b_var) binds
+        ; let tc_binds = map (fst <$>) tc_binds_and_tys
+              vTypes = map (snd . unLoc) tc_binds_and_tys
+        ; tArrDCoercions <- mkAletTArrDCoercions (mkTyVarTy p_var) (mkTyVarTy b_var) vTypes
 
         -- Bring the monomorphic Ids, into scope for the RHSs
         ; let mono_info  = getMonoBindInfo tc_binds
@@ -1640,19 +1641,19 @@ tcAletMonoBinds sig_fn no_gen binds p_var b_var
                     traceTc "tcAletMonoBinds" $  vcat [ ppr n <+> ppr id <+> ppr (idType id) 
                                                   | (n,id) <- rhs_id_env]
                     mapM (wrapLocM tcRhs) tc_binds
-        ; return (listToBag binds', mono_info) }
+        ; return (listToBag binds', mono_info, tArrDCoercions) }
 
 
 tcAletLhs :: TcSigFun -> LetBndrSpec 
           -> TcType -> TcTyVar
           -> HsBind Name 
-          -> TcM (TcMonoBind)
+          -> TcM (TcMonoBind, Type)
 tcAletLhs _sig_fn no_gen p_tp b_var (FunBind { fun_id = L nm_loc name, fun_infix = inf, fun_matches = matches })
   --   | Just sig <- sig_fn name
   --   = do  { mono_id <- newSigLetBndr no_gen name sig
   --         ; return (TcFunBind (name, Just sig, mono_id) nm_loc inf matches) }
   --   | otherwise
-  = do  { mono_ty <- newFlexiTyVarTy argTypeKind
+  = do  { mono_ty <- newFlexiTyVarTy liftedTypeKind
         ; comp_fn <- tcLookupTyCon composeTyConName
         ; let b_tp = mkTyVarTy b_var        
         
@@ -1661,7 +1662,7 @@ tcAletLhs _sig_fn no_gen p_tp b_var (FunBind { fun_id = L nm_loc name, fun_infix
         
         ; mono_id <- newNoSigLetBndr no_gen name compose_tp
 
-        ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches) }
+        ; return (TcFunBind (name, Nothing, mono_id) nm_loc inf matches, mono_ty) }
 
 -- AbsBind, VarBind, PatBind impossible
 tcAletLhs _ _ _ _ other_bind = pprPanic "tcAletLhs" (ppr other_bind)
