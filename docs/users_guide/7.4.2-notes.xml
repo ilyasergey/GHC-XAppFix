@@ -130,6 +130,69 @@
           has been fixed.
         </para>
       </listitem>
+
+      <listitem>
+        <para>
+          Generating an occurence without a binding site within a Template
+          Haskell splice now results in a sensible error message, instead of a
+          compiler panic (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5959">#5999</ulink>,
+          <ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5971">#5971</ulink>).
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          A bug where an exception generated in a TH splice would escape to the
+          top level (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5976">#5976</ulink>)
+          has been fixed.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          When using <literal>-fwarn-unsafe</literal>, GHC now reports unsafe
+          language extensions.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          The non-threaded RTS now avoids wakeups when the system is idle
+          (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5991">#5991</ulink>).
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          A bug causing a crash with a very small initial stack size (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5993">#5993</ulink>)
+          has been fixed.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          A performance bug causing functions to lose the tail-recursive
+          property after optimization (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5920">#5920</ulink>,
+          <ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5997">#5997</ulink>)
+          has been fixed.
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          <literal>hs_init</literal> can now be called with
+          <literal>NULL</literal> pointers as arguments (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/6006">#6006</ulink>).
+        </para>
+      </listitem>
+
     </itemizedlist>
   </sect2>
 
@@ -173,10 +236,12 @@
 
       <listitem>
         <para>
-          Fixed bug (<ulink
-            url="http://hackage.haskell.org/trac/ghc/ticket/5979">#5979</ulink>)
-          where a failed import in GHCi with -XPackageImport would cause
-          successive imports to fail.
+          A GHCi bug (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5979">#5979</ulink>,
+          <ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/6007">#6007</ulink>)
+          where a failed import would cause successive imports to fail has been
+          fixed.
         </para>
       </listitem>
     </itemizedlist>
@@ -238,6 +303,14 @@
           <literal>hp2ps</literal> can now handle backslashes in identifiers
           correctly (<ulink
             url="http://hackage.haskell.org/trac/ghc/ticket/5800">#5800</ulink>).
+        </para>
+      </listitem>
+
+      <listitem>
+        <para>
+          A <literal>haddock</literal> bug (<ulink
+            url="http://hackage.haskell.org/trac/ghc/ticket/5989">#5989</ulink>)
+          where modules were being incorrectly inferred safe has been fixed.
         </para>
       </listitem>
     </itemizedlist>
